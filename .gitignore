@@ -1,0 +1,26 @@
+# Environment / secrets
+.env
+*.db
+*.db-shm
+*.db-wal
+
+# Coverage
+.coverage
+htmlcov/
+
+# Python
+__pycache__/
+*.py[oc]
+*.egg-info
+.venv
+build/
+dist/
+wheels/
+
+# Node
+node_modules/
+dist/
+
+# IDE
+.vscode/
+.idea/

@@ -1,0 +1,87 @@
+export interface User {
+  id: string
+  email: string
+  name: string
+  avatar_url: string | null
+  created_at: string
+}
+
+export interface AuthResponse {
+  access_token: string
+  token_type: string
+  user: User
+}
+
+export interface TodoList {
+  id: string
+  owner_id: string
+  title: string
+  archived: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type NodeType = 'item' | 'section'
+export type Priority = 'high' | 'medium' | 'low'
+export type Permission = 'read' | 'write'
+
+export interface NodeOut {
+  id: string
+  list_id: string
+  parent_id: string | null
+  type: NodeType
+  text: string
+  checked: boolean
+  notes: string | null
+  priority: Priority | null
+  due_date: string | null
+  position: number
+  created_at: string
+  updated_at: string
+}
+
+export interface NodeCreate {
+  type: NodeType
+  text?: string
+  parent_id?: string | null
+  after_id?: string | null
+  checked?: boolean
+  notes?: string | null
+  priority?: Priority | null
+  due_date?: string | null
+}
+
+export interface NodeUpdate {
+  text?: string
+  checked?: boolean
+  notes?: string | null
+  priority?: Priority | null
+  due_date?: string | null
+}
+
+export interface NodeMove {
+  parent_id?: string | null
+  after_id?: string | null
+}
+
+export interface Share {
+  id: string
+  list_id: string
+  user_id: string | null
+  share_token: string
+  permission: Permission
+  created_at: string
+}
+
+export interface TreeNode extends NodeOut {
+  children: TreeNode[]
+  depth: number
+}
+
+// WebSocket message types
+export type WsMessage =
+  | { type: 'node_created'; node: NodeOut }
+  | { type: 'node_updated'; node: NodeOut }
+  | { type: 'node_moved'; node: NodeOut }
+  | { type: 'node_deleted'; node_id: string }
+  | { type: 'presence'; user_ids: string[] }
