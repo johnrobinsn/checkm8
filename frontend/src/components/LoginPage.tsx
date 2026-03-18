@@ -8,7 +8,7 @@ export function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-      <div className="max-w-sm w-full p-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg text-center">
+      <div className="max-w-sm w-full mx-4 p-6 sm:p-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg text-center">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
           checkm8
         </h1>

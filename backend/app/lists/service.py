@@ -104,14 +104,47 @@ async def delete_list(db: aiosqlite.Connection, list_id: str):
 
 async def search_lists(db: aiosqlite.Connection, user_id: str, query: str) -> list[dict]:
     pattern = f"%{query}%"
-    rows = await db.execute_fetchall(
+    # Find lists matching by title
+    title_rows = await db.execute_fetchall(
         """
         SELECT l.* FROM lists l WHERE l.owner_id = ? AND l.title LIKE ? AND l.archived = 0
         UNION
         SELECT l.* FROM lists l JOIN list_shares s ON s.list_id = l.id
         WHERE s.user_id = ? AND l.title LIKE ? AND l.archived = 0
-        ORDER BY updated_at DESC
         """,
         (user_id, pattern, user_id, pattern),
     )
-    return [dict(r) for r in rows]
+    # Find lists matching by node text or notes
+    node_rows = await db.execute_fetchall(
+        """
+        SELECT DISTINCT l.* FROM lists l
+        JOIN nodes n ON n.list_id = l.id
+        WHERE l.owner_id = ? AND (n.text LIKE ? OR n.notes LIKE ?) AND l.archived = 0
+        UNION
+        SELECT DISTINCT l.* FROM lists l
+        JOIN list_shares s ON s.list_id = l.id
+        JOIN nodes n ON n.list_id = l.id
+        WHERE s.user_id = ? AND (n.text LIKE ? OR n.notes LIKE ?) AND l.archived = 0
+        """,
+        (user_id, pattern, pattern, user_id, pattern, pattern),
+    )
+    # Merge and deduplicate
+    seen = set()
+    results = []
+    for row in list(title_rows) + list(node_rows):
+        d = dict(row)
+        if d["id"] not in seen:
+            seen.add(d["id"])
+            results.append(d)
+    # For each list, find matching nodes
+    for lst in results:
+        matching_nodes = await db.execute_fetchall(
+            """
+            SELECT id, type, text, notes FROM nodes
+            WHERE list_id = ? AND (text LIKE ? OR notes LIKE ?)
+            LIMIT 5
+            """,
+            (lst["id"], pattern, pattern),
+        )
+        lst["matching_nodes"] = [dict(n) for n in matching_nodes]
+    return results

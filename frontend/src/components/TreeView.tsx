@@ -98,6 +98,21 @@ export function TreeView({
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
 
+  const addNodeContextAware = useCallback((type: 'item' | 'section') => {
+    const focusedNode = focusedId ? visibleNodes.find((n) => n.id === focusedId) : null
+    if (focusedNode) {
+      if (type === 'item' && focusedNode.type === 'section') {
+        // Add item as child of focused section
+        onAddNode({ type, text: '', parent_id: focusedNode.id })
+      } else {
+        // Add as sibling after focused node (works for both items and sections)
+        onAddNode({ type, text: '', parent_id: focusedNode.parent_id, after_id: focusedNode.id })
+      }
+    } else {
+      onAddNode({ type, text: '' })
+    }
+  }, [focusedId, visibleNodes, onAddNode])
+
   // Auto-focus tree container so keyboard shortcuts work immediately
   useEffect(() => {
     if (!isEditing) {
@@ -199,6 +214,8 @@ export function TreeView({
           e.preventDefault()
           if (focusedNode && focusedNode.type === 'item') {
             onUpdate(focusedNode.id, { checked: !focusedNode.checked })
+          } else if (focusedNode && focusedNode.type === 'section') {
+            onToggleCollapse(focusedNode.id)
           }
           break
         }
@@ -225,41 +242,14 @@ export function TreeView({
           // Ctrl+N or Insert to add new item
           if (e.key === 'n' && !(e.ctrlKey || e.metaKey)) break
           e.preventDefault()
-          if (focusedNode) {
-            // If focused on a section, add as a child of that section
-            if (focusedNode.type === 'section') {
-              onAddNode({
-                type: 'item',
-                text: '',
-                parent_id: focusedNode.id,
-              })
-            } else {
-              onAddNode({
-                type: 'item',
-                text: '',
-                parent_id: focusedNode.parent_id,
-                after_id: focusedNode.id,
-              })
-            }
-          } else {
-            onAddNode({ type: 'item', text: '' })
-          }
+          addNodeContextAware('item')
           break
         }
         case 'g': {
           // Ctrl+Alt+G to add new section/group
           if (!((e.ctrlKey || e.metaKey) && e.altKey)) break
           e.preventDefault()
-          if (focusedNode) {
-            onAddNode({
-              type: 'section',
-              text: '',
-              parent_id: focusedNode.parent_id,
-              after_id: focusedNode.id,
-            })
-          } else {
-            onAddNode({ type: 'section', text: '' })
-          }
+          addNodeContextAware('section')
           break
         }
         case 'Tab': {
@@ -316,7 +306,7 @@ export function TreeView({
           break
       }
     },
-    [visibleNodes, focusedId, collapsed, nodes, onFocus, onToggleCollapse, onUpdate, onAddNode, onMoveNode, onDelete, onUndo, onRedo],
+    [visibleNodes, focusedId, collapsed, nodes, onFocus, onToggleCollapse, onUpdate, addNodeContextAware, onMoveNode, onDelete, onUndo, onRedo],
   )
 
   return (
@@ -331,12 +321,20 @@ export function TreeView({
           {visibleNodes.length === 0 ? (
             <div className="text-center py-12 text-gray-400 dark:text-gray-500">
               <p className="text-lg mb-2">No items yet</p>
-              <button
-                className="mt-2 px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                onClick={() => onAddNode({ type: 'item', text: '' })}
-              >
-                + Add item
-              </button>
+              <div className="mt-2 flex items-center justify-center gap-2">
+                <button
+                  className="px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                  onClick={() => addNodeContextAware('item')}
+                >
+                  + Add item
+                </button>
+                <button
+                  className="px-4 py-2 text-sm bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                  onClick={() => addNodeContextAware('section')}
+                >
+                  + Add section
+                </button>
+              </div>
             </div>
           ) : (
             <>
@@ -346,7 +344,7 @@ export function TreeView({
                   node={node}
                   focused={node.id === focusedId}
                   collapsed={collapsed.has(node.id)}
-                  startEditing={node.id === editingNodeId || (node.id === focusedId && node.text === '')}
+                  startEditing={node.id === editingNodeId}
                   onToggleCollapse={() => onToggleCollapse(node.id)}
                   onUpdate={(data) => onUpdate(node.id, data)}
                   onFocus={() => onFocus(node.id)}
@@ -357,15 +355,26 @@ export function TreeView({
                   }}
                 />
               ))}
-              <button
-                className="mt-2 ml-2 px-3 py-1.5 text-sm text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded flex items-center gap-1.5 transition-colors"
-                onClick={() => onAddNode({ type: 'item', text: '' })}
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Add item
-              </button>
+              <div className="mt-3 ml-1 sm:ml-2 flex items-center gap-1 sm:gap-2">
+                <button
+                  className="px-3 py-2 sm:py-1.5 text-sm text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded flex items-center gap-1.5 transition-colors"
+                  onClick={() => addNodeContextAware('item')}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add item
+                </button>
+                <button
+                  className="px-3 py-2 sm:py-1.5 text-sm text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded flex items-center gap-1.5 transition-colors"
+                  onClick={() => addNodeContextAware('section')}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16" />
+                  </svg>
+                  Add section
+                </button>
+              </div>
             </>
           )}
         </SortableContext>

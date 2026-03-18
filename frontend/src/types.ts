@@ -19,6 +19,7 @@ export interface TodoList {
   archived: boolean
   created_at: string
   updated_at: string
+  matching_nodes?: { id: string; type: string; text: string; notes: string | null }[]
 }
 
 export type NodeType = 'item' | 'section'
@@ -84,4 +85,10 @@ export type WsMessage =
   | { type: 'node_updated'; node: NodeOut }
   | { type: 'node_moved'; node: NodeOut }
   | { type: 'node_deleted'; node_id: string }
-  | { type: 'presence'; user_ids: string[] }
+  | { type: 'presence'; users: PresenceUser[] }
+
+export interface PresenceUser {
+  id: string
+  name: string
+  avatar_url?: string | null
+}

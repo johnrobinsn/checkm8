@@ -14,7 +14,8 @@ from app.lists.service import (
     search_lists,
     update_list,
 )
-from app.schemas import ListCreate, ListOut, ListUpdate
+from app.schemas import ListCreate, ListOut, ListSearchOut, ListUpdate
+from app.ws.manager import manager
 
 router = APIRouter(prefix="/lists", tags=["lists"])
 
@@ -26,21 +27,23 @@ async def create(
     db: aiosqlite.Connection = Depends(get_db),
 ):
     lst = await create_list(db, body.title, user["id"])
+    await manager.broadcast_global({"type": "list_created", "list": lst})
     return ListOut(**lst)
 
 
-@router.get("", response_model=list[ListOut])
+@router.get("")
 async def list_all(
     include_archived: bool = Query(False),
     q: str | None = Query(None),
     user: dict = Depends(get_current_user),
     db: aiosqlite.Connection = Depends(get_db),
-):
+) -> list[ListOut] | list[ListSearchOut]:
     if q:
         results = await search_lists(db, user["id"], q)
+        return [ListSearchOut(**r) for r in results]
     else:
         results = await get_user_lists(db, user["id"], include_archived=include_archived)
-    return [ListOut(**r) for r in results]
+        return [ListOut(**r) for r in results]
 
 
 @router.get("/{list_id}", response_model=ListOut)
@@ -66,6 +69,7 @@ async def update(
         raise HTTPException(status_code=403, detail="No write access")
     if body.title is not None:
         lst = await update_list(db, list_id, body.title)
+        await manager.broadcast_global({"type": "list_updated", "list": lst})
         return ListOut(**lst)
     lst = await get_accessible_list(db, list_id, user["id"])
     return ListOut(**lst)
@@ -81,6 +85,7 @@ async def archive(
     if not lst or lst["owner_id"] != user["id"]:
         raise HTTPException(status_code=403, detail="Only the owner can archive")
     result = await archive_list(db, list_id)
+    await manager.broadcast_global({"type": "list_archived", "list": result})
     return ListOut(**result)
 
 
@@ -94,6 +99,7 @@ async def restore(
     if not lst or lst["owner_id"] != user["id"]:
         raise HTTPException(status_code=403, detail="Only the owner can restore")
     result = await restore_list(db, list_id)
+    await manager.broadcast_global({"type": "list_restored", "list": result})
     return ListOut(**result)
 
 
@@ -107,3 +113,4 @@ async def delete(
     if not lst or lst["owner_id"] != user["id"]:
         raise HTTPException(status_code=403, detail="Only the owner can delete")
     await delete_list(db, list_id)
+    await manager.broadcast_global({"type": "list_deleted", "list_id": list_id})

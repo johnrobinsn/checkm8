@@ -21,6 +21,37 @@ async def _authenticate_ws(token: str, db: aiosqlite.Connection) -> dict | None:
         return None
 
 
+@router.websocket("/ws/global")
+async def global_websocket(ws: WebSocket):
+    """Global WebSocket for list-level change notifications."""
+    token = ws.query_params.get("token")
+    if not token:
+        await ws.close(code=4001, reason="Missing token")
+        return
+
+    db = await aiosqlite.connect(settings.database_url)
+    db.row_factory = aiosqlite.Row
+    await db.execute("PRAGMA foreign_keys=ON")
+
+    try:
+        user = await _authenticate_ws(token, db)
+        if not user:
+            await ws.close(code=4001, reason="Invalid token")
+            return
+
+        await manager.connect_global(user["id"], ws)
+
+        try:
+            while True:
+                await ws.receive_text()
+        except WebSocketDisconnect:
+            pass
+        finally:
+            await manager.disconnect_global(ws)
+    finally:
+        await db.close()
+
+
 @router.websocket("/ws/{list_id}")
 async def websocket_endpoint(ws: WebSocket, list_id: str):
     # Auth via query param
@@ -40,6 +71,7 @@ async def websocket_endpoint(ws: WebSocket, list_id: str):
             await ws.close(code=4001, reason="Invalid token")
             return
 
+        manager.register_user(user)
         await manager.connect(list_id, user["id"], ws)
 
         try:

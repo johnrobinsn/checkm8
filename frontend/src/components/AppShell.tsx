@@ -13,7 +13,9 @@ import type { TodoList } from '../types'
 export function AppShell() {
   const { user } = useAuth()
   const [searchParams] = useSearchParams()
-  const [selectedListId, setSelectedListId] = useState<string | null>(() => searchParams.get('list'))
+  const [selectedListId, setSelectedListId] = useState<string | null>(
+    () => searchParams.get('list') || localStorage.getItem('checkm8_last_list')
+  )
   const [selectedList, setSelectedList] = useState<TodoList | null>(null)
   const [showShare, setShowShare] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -24,7 +26,7 @@ export function AppShell() {
     collapsed,
     focusedId,
     setFocusedId,
-    presenceUserIds,
+    presenceUsers,
     loading,
     toggleCollapse,
     addNode,
@@ -37,7 +39,11 @@ export function AppShell() {
 
   useEffect(() => {
     if (selectedListId) {
-      listsApi.getList(selectedListId).then(setSelectedList).catch(() => setSelectedList(null))
+      localStorage.setItem('checkm8_last_list', selectedListId)
+      listsApi.getList(selectedListId).then(setSelectedList).catch(() => {
+        setSelectedList(null)
+        localStorage.removeItem('checkm8_last_list')
+      })
     } else {
       setSelectedList(null)
     }
@@ -45,25 +51,38 @@ export function AppShell() {
 
   const [triggerNewList, setTriggerNewList] = useState(0)
 
-  // Global keyboard shortcut: Ctrl+Shift+N to create new list
+  // Global keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      console.log('global keydown', e.key, e.code, 'ctrl:', e.ctrlKey, 'alt:', e.altKey, 'meta:', e.metaKey)
       if ((e.ctrlKey || e.metaKey) && e.altKey && e.key === 'n') {
         e.preventDefault()
         setTriggerNewList((c) => c + 1)
       }
+      // Ctrl+Alt+L or / (when not in an input) to focus search
+      const tag = (e.target as HTMLElement).tagName
+      const isInput = tag === 'INPUT' || tag === 'TEXTAREA'
+      if ((e.ctrlKey || e.metaKey) && e.altKey && e.key.toLowerCase() === 'l') {
+        e.preventDefault()
+        document.getElementById('sidebar-search')?.focus()
+        if (!sidebarOpen) setSidebarOpen(true)
+      } else if (e.key === '/' && !isInput) {
+        e.preventDefault()
+        document.getElementById('sidebar-search')?.focus()
+        if (!sidebarOpen) setSidebarOpen(true)
+      }
     }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [])
+    window.addEventListener('keydown', handler, true)
+    return () => window.removeEventListener('keydown', handler, true)
+  }, [sidebarOpen])
 
   const isOwner = selectedList?.owner_id === user?.id
 
   return (
-    <div className="flex h-screen bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100">
+    <div className="flex h-dvh bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100">
       {/* Mobile sidebar toggle */}
       <button
-        className="lg:hidden fixed top-3 left-3 z-40 p-2 bg-white dark:bg-gray-800 rounded-lg shadow-md"
+        className="lg:hidden fixed top-3 left-3 z-40 p-3 min-w-[44px] min-h-[44px] flex items-center justify-center bg-white dark:bg-gray-800 rounded-lg shadow-md"
         onClick={() => setSidebarOpen(!sidebarOpen)}
       >
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -71,11 +90,17 @@ export function AppShell() {
         </svg>
       </button>
 
-      {/* Sidebar */}
-      <div className={`${sidebarOpen ? '' : 'hidden'} lg:block`}>
+      {/* Sidebar - overlay on mobile */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/30 z-30 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+      <div className={`${sidebarOpen ? 'fixed inset-y-0 left-0 z-30' : 'hidden'} lg:relative lg:block`}>
         <ListSidebar
           selectedId={selectedListId}
-          onSelect={(id) => { setSelectedListId(id); setSidebarOpen(false) }}
+          onSelect={(id, focusNodeId) => { setSelectedListId(id); setSidebarOpen(false); if (focusNodeId) setFocusedId(focusNodeId) }}
           triggerNew={triggerNewList}
         />
       </div>
@@ -85,10 +110,10 @@ export function AppShell() {
         {selectedList ? (
           <>
             {/* List header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 pl-14 lg:pl-4">
               <h2 className="text-lg font-semibold truncate">{selectedList.title}</h2>
               <div className="flex items-center gap-3">
-                <PresenceBar userIds={presenceUserIds} />
+                <PresenceBar users={presenceUsers} />
                 <button
                   onClick={() => setShowShare(true)}
                   className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg flex items-center gap-1.5 transition-colors"
@@ -102,7 +127,7 @@ export function AppShell() {
             </div>
 
             {/* Tree content */}
-            <div className="flex-1 overflow-y-auto p-4">
+            <div className="flex-1 overflow-y-auto p-2 sm:p-4">
               {loading ? (
                 <div className="flex items-center justify-center py-12">
                   <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />

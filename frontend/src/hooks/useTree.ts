@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { NodeCreate, NodeOut, NodeUpdate, WsMessage } from '../types'
+import type { NodeCreate, NodeOut, NodeUpdate, PresenceUser, WsMessage } from '../types'
 import { buildTree, getVisibleNodes } from '../lib/tree'
 import * as nodesApi from '../api/nodes'
 import { useWebSocket } from './useWebSocket'
@@ -9,7 +9,7 @@ export function useTree(listId: string | null) {
   const [nodes, setNodes] = useState<NodeOut[]>([])
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [focusedId, setFocusedId] = useState<string | null>(null)
-  const [presenceUserIds, setPresenceUserIds] = useState<string[]>([])
+  const [presenceUsers, setPresenceUsers] = useState<PresenceUser[]>([])
   const [loading, setLoading] = useState(false)
   const { execute, undo, redo } = useUndoRedo()
 
@@ -52,7 +52,7 @@ export function useTree(listId: string | null) {
         })
         break
       case 'presence':
-        setPresenceUserIds(msg.user_ids)
+        setPresenceUsers(msg.users)
         break
     }
   }, [])
@@ -157,7 +157,7 @@ export function useTree(listId: string | null) {
     collapsed,
     focusedId,
     setFocusedId,
-    presenceUserIds,
+    presenceUsers,
     loading,
     toggleCollapse,
     addNode,

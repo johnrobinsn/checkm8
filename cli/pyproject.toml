@@ -1,0 +1,18 @@
+[project]
+name = "checkm8-cli"
+version = "0.1.0"
+description = "CLI for checkm8 collaborative todo lists"
+requires-python = ">=3.11"
+dependencies = [
+    "click>=8.1",
+    "httpx>=0.27",
+    "rich>=13.0",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+checkm8 = "checkm8_cli.main:cli"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

@@ -54,6 +54,14 @@ CREATE TABLE IF NOT EXISTS nodes (
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS device_codes (
+    code TEXT PRIMARY KEY,
+    user_id TEXT REFERENCES users(id),
+    api_token TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    expires_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_nodes_list ON nodes(list_id);
 CREATE INDEX IF NOT EXISTS idx_nodes_parent ON nodes(parent_id);
 CREATE INDEX IF NOT EXISTS idx_list_shares_token ON list_shares(share_token);

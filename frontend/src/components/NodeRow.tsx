@@ -27,6 +27,7 @@ export function NodeRow({
 }: NodeRowProps) {
   const [editing, setEditingState] = useState(false)
   const [editText, setEditText] = useState(node.text)
+  const committedRef = useRef(false)
 
   const setEditing = (value: boolean) => {
     setEditingState(value)
@@ -36,6 +37,7 @@ export function NodeRow({
   // Allow parent to trigger edit mode
   useEffect(() => {
     if (startEditingProp && focused && !editing) {
+      committedRef.current = false
       setEditing(true)
     }
   }, [startEditingProp, focused])
@@ -59,14 +61,19 @@ export function NodeRow({
   }, [editingNotes])
 
   useEffect(() => {
-    setEditText(node.text)
+    if (!editing) {
+      setEditText(node.text)
+    }
     setNotesText(node.notes || '')
   }, [node.text, node.notes])
 
   const commitEdit = () => {
+    if (committedRef.current) return
+    committedRef.current = true
+    const textToSave = editText
     setEditing(false)
-    if (editText !== node.text) {
-      onUpdate({ text: editText })
+    if (textToSave !== node.text) {
+      onUpdate({ text: textToSave })
     }
   }
 
@@ -89,14 +96,17 @@ export function NodeRow({
   }
 
   const hasChildren = node.children.length > 0
-  const indent = node.depth * 24
+  // Smaller indent on mobile to prevent overflow
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640
+  const indent = node.depth * (isMobile ? 16 : 24)
 
   return (
     <div data-node-id={node.id}>
       <div
         className={`flex items-center gap-2 ${node.type === 'section' ? 'py-2 mt-3 first:mt-0' : 'py-1'} px-2 rounded group cursor-default select-none relative
           ${focused ? 'bg-blue-50 dark:bg-blue-900/30 ring-2 ring-blue-400 dark:ring-blue-500 z-10' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}
-          ${node.type === 'item' && node.checked ? 'opacity-60' : ''}`}
+          ${node.type === 'item' && node.checked ? 'opacity-60' : ''}
+          ${node.type === 'section' && node.depth > 0 ? 'border-l-2 border-gray-300 dark:border-gray-600' : ''}`}
         style={{ paddingLeft: `${indent + 8}px` }}
         onClick={onFocus}
         onDoubleClick={() => setEditing(true)}
@@ -104,7 +114,7 @@ export function NodeRow({
       >
         {/* Collapse/expand toggle */}
         <button
-          className={`w-5 h-5 flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0 ${hasChildren ? '' : 'invisible'}`}
+          className={`w-7 h-7 sm:w-5 sm:h-5 flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0 ${hasChildren ? '' : 'invisible'}`}
           onClick={(e) => { e.stopPropagation(); onToggleCollapse() }}
           tabIndex={-1}
         >
@@ -119,7 +129,7 @@ export function NodeRow({
             type="checkbox"
             checked={node.checked}
             onChange={() => onUpdate({ checked: !node.checked })}
-            className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-500 focus:ring-blue-500 cursor-pointer flex-shrink-0"
+            className="w-5 h-5 sm:w-4 sm:h-4 rounded border-gray-300 dark:border-gray-600 text-blue-500 focus:ring-blue-500 cursor-pointer flex-shrink-0"
             tabIndex={-1}
             onClick={(e) => e.stopPropagation()}
           />
@@ -141,7 +151,7 @@ export function NodeRow({
             className="flex-1 bg-transparent border-none outline-none text-gray-900 dark:text-white text-sm p-0"
           />
         ) : (
-          <span className={`flex-1 ${node.type === 'section' ? 'text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400' : 'text-sm text-gray-700 dark:text-gray-300'} ${node.checked ? 'line-through' : ''}`}>
+          <span className={`flex-1 ${node.type === 'section' ? (node.depth === 0 ? 'text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400' : 'text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500') : 'text-sm text-gray-700 dark:text-gray-300'} ${node.checked ? 'line-through' : ''}`}>
             {node.text || <span className="text-gray-400 italic">untitled</span>}
           </span>
         )}
@@ -155,7 +165,7 @@ export function NodeRow({
 
         {/* Notes toggle */}
         <button
-          className={`text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ${node.notes ? '!opacity-100' : ''}`}
+          className={`p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0 ${node.notes ? '!opacity-100' : ''}`}
           onClick={(e) => { e.stopPropagation(); setShowNotes(!showNotes) }}
           tabIndex={-1}
           title="Notes"
@@ -167,7 +177,7 @@ export function NodeRow({
 
         {/* Delete */}
         <button
-          className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+          className="p-1 text-gray-400 hover:text-red-500 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0"
           onClick={(e) => { e.stopPropagation(); onDelete() }}
           tabIndex={-1}
           title="Delete"
@@ -180,7 +190,7 @@ export function NodeRow({
 
       {/* Inline notes */}
       {showNotes && (
-        <div style={{ paddingLeft: `${indent + 52}px` }} className="pb-1">
+        <div style={{ paddingLeft: `${indent + 52}px` }} className="pb-1 overflow-hidden">
           {editingNotes ? (
             <textarea
               ref={notesRef}

@@ -8,13 +8,14 @@ GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 
 
 def get_google_login_url(state: str = "") -> str:
+    from urllib.parse import quote
     params = {
         "client_id": settings.google_client_id,
         "redirect_uri": settings.google_redirect_uri,
         "response_type": "code",
         "scope": "openid email profile",
         "access_type": "offline",
-        "state": state,
+        "state": quote(state) if state else "",
     }
     qs = "&".join(f"{k}={v}" for k, v in params.items())
     return f"{GOOGLE_AUTH_URL}?{qs}"

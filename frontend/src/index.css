@@ -2,6 +2,15 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-body {
+html, body {
   margin: 0;
+  min-height: 100%;
+  min-height: 100dvh;
+  background-color: #030712;
+  /* Safe area insets for notched devices in standalone PWA mode */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+html:not(.dark) body {
+  background-color: #ffffff;
 }

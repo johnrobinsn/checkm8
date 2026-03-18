@@ -4,6 +4,7 @@ import { LoginPage } from './components/LoginPage'
 import { AuthCallback } from './components/AuthCallback'
 import { AppShell } from './components/AppShell'
 import { ClaimPage } from './components/ClaimPage'
+import { TokensPage } from './components/TokensPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -36,6 +37,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <ClaimPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/settings/tokens"
+        element={
+          <ProtectedRoute>
+            <TokensPage />
           </ProtectedRoute>
         }
       />

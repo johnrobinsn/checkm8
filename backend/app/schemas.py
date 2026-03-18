@@ -76,6 +76,17 @@ class ListOut(BaseModel):
     updated_at: str
 
 
+class MatchingNode(BaseModel):
+    id: str
+    type: str
+    text: str
+    notes: str | None = None
+
+
+class ListSearchOut(ListOut):
+    matching_nodes: list[MatchingNode] = []
+
+
 # --- Nodes ---
 
 class NodeCreate(BaseModel):

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 import aiosqlite
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from jose import jwt
 
 from app.auth.dependencies import get_current_user
@@ -27,16 +27,21 @@ def _create_jwt(user_id: str) -> str:
 
 
 @router.get("/google/login")
-async def google_login():
-    return {"url": get_google_login_url()}
+async def google_login(cli_callback: str | None = None):
+    state = f"cli:{cli_callback}" if cli_callback else ""
+    return {"url": get_google_login_url(state=state)}
 
 
 @router.get("/google/callback")
 async def google_callback(
     code: str,
     response: Response,
+    state: str = "",
     db: aiosqlite.Connection = Depends(get_db),
 ):
+    from urllib.parse import unquote
+    state = unquote(state)
+
     userinfo = await exchange_code(code)
     google_id = userinfo["id"]
     email = userinfo["email"]
@@ -61,6 +66,45 @@ async def google_callback(
         await db.commit()
         rows = await db.execute_fetchall("SELECT * FROM users WHERE id = ?", (user_id,))
         user = dict(rows[0])
+
+    # CLI OAuth flow: create API token and redirect to CLI's local server
+    if state.startswith("cli:"):
+        cli_callback = state[4:]
+        raw_token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+        token_id = str(uuid.uuid4())
+        await db.execute(
+            "INSERT INTO api_tokens (id, user_id, token_hash, name) VALUES (?, ?, ?, ?)",
+            (token_id, user["id"], token_hash, "CLI login"),
+        )
+        await db.commit()
+        return RedirectResponse(url=f"{cli_callback}?token={raw_token}&user={name}&email={email}")
+
+    # Device code flow: generate short code, create API token, show code in browser
+    if state == "device":
+        import random
+        import string
+        device_code = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
+        raw_token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+        token_id = str(uuid.uuid4())
+        await db.execute(
+            "INSERT INTO api_tokens (id, user_id, token_hash, name) VALUES (?, ?, ?, ?)",
+            (token_id, user["id"], token_hash, "CLI (device code)"),
+        )
+        expires = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
+        await db.execute(
+            "INSERT OR REPLACE INTO device_codes (code, user_id, api_token, expires_at) VALUES (?, ?, ?, ?)",
+            (device_code, user["id"], raw_token, expires),
+        )
+        await db.commit()
+        return HTMLResponse(f"""<!DOCTYPE html>
+<html><body style="font-family:system-ui;text-align:center;padding:60px;background:#f9fafb">
+<h2>Your device code</h2>
+<p style="font-size:48px;font-weight:bold;letter-spacing:8px;color:#2563eb;margin:30px 0">{device_code}</p>
+<p>Enter this code in your terminal to complete authentication.</p>
+<p style="color:#6b7280;font-size:14px">This code expires in 10 minutes.</p>
+</body></html>""")
 
     token = _create_jwt(user["id"])
 
@@ -129,6 +173,51 @@ async def delete_api_token(
         raise HTTPException(status_code=404, detail="Token not found")
     await db.execute("DELETE FROM api_tokens WHERE id = ?", (token_id,))
     await db.commit()
+
+
+@router.get("/device")
+async def device_login():
+    """Start device code flow — redirects to Google OAuth."""
+    return RedirectResponse(url=get_google_login_url(state="device"))
+
+
+@router.post("/device/exchange")
+async def device_exchange(
+    body: dict,
+    db: aiosqlite.Connection = Depends(get_db),
+):
+    """CLI sends the device code, gets back an API token."""
+    code = body.get("code", "").strip().upper()
+    if not code:
+        raise HTTPException(status_code=400, detail="Code is required")
+
+    rows = await db.execute_fetchall("SELECT * FROM device_codes WHERE code = ?", (code,))
+    if not rows:
+        raise HTTPException(status_code=404, detail="Invalid code")
+
+    row = dict(rows[0])
+    expires = datetime.fromisoformat(row["expires_at"])
+    if datetime.now(timezone.utc) > expires:
+        await db.execute("DELETE FROM device_codes WHERE code = ?", (code,))
+        await db.commit()
+        raise HTTPException(status_code=410, detail="Code expired")
+
+    api_token = row["api_token"]
+    user_id = row["user_id"]
+
+    # Clean up used code
+    await db.execute("DELETE FROM device_codes WHERE code = ?", (code,))
+    await db.commit()
+
+    # Get user info
+    user_rows = await db.execute_fetchall("SELECT * FROM users WHERE id = ?", (user_id,))
+    user = dict(user_rows[0]) if user_rows else {}
+
+    return {
+        "token": api_token,
+        "user": user.get("name", ""),
+        "email": user.get("email", ""),
+    }
 
 
 @router.post("/logout")
