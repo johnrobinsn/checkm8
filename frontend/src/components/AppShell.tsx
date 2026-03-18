@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useTree } from '../hooks/useTree'
@@ -77,6 +77,24 @@ export function AppShell() {
   }, [sidebarOpen])
 
   const isOwner = selectedList?.owner_id === user?.id
+
+  // FAB state
+  const [fabMenuOpen, setFabMenuOpen] = useState(false)
+  const fabTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const fabLongPressedRef = useRef(false)
+
+  const addNodeContextAware = useCallback((type: 'item' | 'section') => {
+    const focusedNode = focusedId ? visibleNodes.find((n) => n.id === focusedId) : null
+    if (focusedNode) {
+      if (type === 'item' && focusedNode.type === 'section') {
+        addNode({ type, text: '', parent_id: focusedNode.id })
+      } else {
+        addNode({ type, text: '', parent_id: focusedNode.parent_id, after_id: focusedNode.id })
+      }
+    } else {
+      addNode({ type, text: '' })
+    }
+  }, [focusedId, visibleNodes, addNode])
 
   return (
     <div className="flex h-dvh bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100">
@@ -167,6 +185,69 @@ export function AppShell() {
           isOwner={isOwner}
           onClose={() => setShowShare(false)}
         />
+      )}
+
+      {/* Floating Action Button */}
+      {selectedList && (
+        <>
+          {fabMenuOpen && (
+            <div className="fixed inset-0 z-40" onClick={() => setFabMenuOpen(false)} />
+          )}
+          <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2">
+            {fabMenuOpen && (
+              <div className="mb-1 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <button
+                  className="w-full px-4 py-3 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                  onClick={() => { addNodeContextAware('item'); setFabMenuOpen(false) }}
+                >
+                  <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add item
+                </button>
+                <button
+                  className="w-full px-4 py-3 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 border-t border-gray-100 dark:border-gray-700 transition-colors"
+                  onClick={() => { addNodeContextAware('section'); setFabMenuOpen(false) }}
+                >
+                  <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16" />
+                  </svg>
+                  Add section
+                </button>
+              </div>
+            )}
+            <button
+              className="w-14 h-14 rounded-full bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white shadow-lg flex items-center justify-center transition-all select-none"
+              onPointerDown={() => {
+                fabLongPressedRef.current = false
+                fabTimerRef.current = setTimeout(() => {
+                  fabLongPressedRef.current = true
+                  setFabMenuOpen(true)
+                }, 500)
+              }}
+              onPointerUp={() => {
+                if (fabTimerRef.current) {
+                  clearTimeout(fabTimerRef.current)
+                  fabTimerRef.current = null
+                }
+                if (!fabLongPressedRef.current && !fabMenuOpen) {
+                  addNodeContextAware('item')
+                }
+                fabLongPressedRef.current = false
+              }}
+              onPointerLeave={() => {
+                if (fabTimerRef.current) {
+                  clearTimeout(fabTimerRef.current)
+                  fabTimerRef.current = null
+                }
+              }}
+            >
+              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
+          </div>
+        </>
       )}
 
       <ToastContainer />
