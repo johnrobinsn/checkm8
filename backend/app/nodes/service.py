@@ -211,6 +211,78 @@ async def import_nodes(
     return created
 
 
+async def search_sections(
+    db: aiosqlite.Connection,
+    user_id: str,
+    query: str,
+    current_list_id: str | None = None,
+) -> list[dict]:
+    """Search for sections across all accessible lists."""
+    rows = await db.execute_fetchall(
+        """
+        SELECT n.id, n.text, n.list_id, l.title as list_title
+        FROM nodes n
+        JOIN lists l ON n.list_id = l.id
+        WHERE n.type = 'section'
+          AND n.text LIKE ?
+          AND (l.owner_id = ? OR l.id IN (
+            SELECT list_id FROM list_shares WHERE user_id = ?
+          ))
+        ORDER BY
+          CASE WHEN n.list_id = ? THEN 0 ELSE 1 END,
+          l.title ASC,
+          n.text ASC
+        LIMIT 20
+        """,
+        (f"%{query}%", user_id, user_id, current_list_id or ""),
+    )
+    return [dict(r) for r in rows]
+
+
+async def resolve_section(
+    db: aiosqlite.Connection,
+    user_id: str,
+    name: str,
+    list_title: str | None = None,
+    current_list_id: str | None = None,
+) -> dict | None:
+    """Resolve a section link to a section_id and list_id."""
+    if list_title:
+        rows = await db.execute_fetchall(
+            """
+            SELECT n.id as section_id, n.list_id
+            FROM nodes n
+            JOIN lists l ON n.list_id = l.id
+            WHERE n.type = 'section'
+              AND n.text = ?
+              AND l.title = ?
+              AND (l.owner_id = ? OR l.id IN (
+                SELECT list_id FROM list_shares WHERE user_id = ?
+              ))
+            LIMIT 1
+            """,
+            (name, list_title, user_id, user_id),
+        )
+    else:
+        # Search current list first, then others
+        rows = await db.execute_fetchall(
+            """
+            SELECT n.id as section_id, n.list_id
+            FROM nodes n
+            JOIN lists l ON n.list_id = l.id
+            WHERE n.type = 'section'
+              AND n.text = ?
+              AND (l.owner_id = ? OR l.id IN (
+                SELECT list_id FROM list_shares WHERE user_id = ?
+              ))
+            ORDER BY CASE WHEN n.list_id = ? THEN 0 ELSE 1 END
+            LIMIT 1
+            """,
+            (name, user_id, user_id, current_list_id or ""),
+        )
+    return dict(rows[0]) if rows else None
+
+
 async def delete_node(db: aiosqlite.Connection, node_id: str):
     """Delete a node and all its descendants."""
     # Recursively delete children first

@@ -22,6 +22,7 @@ interface TreeViewProps {
   nodes: NodeOut[]
   collapsed: Set<string>
   focusedId: string | null
+  currentListId?: string
   onFocus: (id: string) => void
   onToggleCollapse: (id: string) => void
   onUpdate: (nodeId: string, data: any) => void
@@ -30,6 +31,7 @@ interface TreeViewProps {
   onMoveNode: (nodeId: string, parentId: string | null, afterId: string | null) => void
   onUndo: () => void
   onRedo: () => void
+  onNavigateToSection?: (listId: string, sectionId: string) => void
 }
 
 function SortableNode({
@@ -37,21 +39,25 @@ function SortableNode({
   focused,
   collapsed,
   startEditing,
+  currentListId,
   onToggleCollapse,
   onUpdate,
   onFocus,
   onDelete,
   onEditingChange,
+  onNavigateToSection,
 }: {
   node: TreeNode
   focused: boolean
   collapsed: boolean
   startEditing?: boolean
+  currentListId?: string
   onToggleCollapse: () => void
   onUpdate: (data: any) => void
   onFocus: () => void
   onDelete: () => void
   onEditingChange?: (editing: boolean) => void
+  onNavigateToSection?: (listId: string, sectionId: string) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: node.id,
@@ -70,11 +76,13 @@ function SortableNode({
         focused={focused}
         collapsed={collapsed}
         startEditing={startEditing}
+        currentListId={currentListId}
         onToggleCollapse={onToggleCollapse}
         onUpdate={onUpdate}
         onFocus={onFocus}
         onDelete={onDelete}
         onEditingChange={onEditingChange}
+        onNavigateToSection={onNavigateToSection}
       />
     </div>
   )
@@ -85,6 +93,7 @@ export function TreeView({
   nodes,
   collapsed,
   focusedId,
+  currentListId,
   onFocus,
   onToggleCollapse,
   onUpdate,
@@ -93,6 +102,7 @@ export function TreeView({
   onMoveNode,
   onUndo,
   onRedo,
+  onNavigateToSection,
 }: TreeViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null)
@@ -345,6 +355,7 @@ export function TreeView({
                   focused={node.id === focusedId}
                   collapsed={collapsed.has(node.id)}
                   startEditing={node.id === editingNodeId}
+                  currentListId={currentListId}
                   onToggleCollapse={() => onToggleCollapse(node.id)}
                   onUpdate={(data) => onUpdate(node.id, data)}
                   onFocus={() => onFocus(node.id)}
@@ -353,6 +364,7 @@ export function TreeView({
                     setIsEditing(editing)
                     if (!editing) setEditingNodeId(null)
                   }}
+                  onNavigateToSection={onNavigateToSection}
                 />
               ))}
               <div className="mt-3 ml-1 sm:ml-2 flex items-center gap-1 sm:gap-2">

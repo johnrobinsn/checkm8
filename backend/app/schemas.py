@@ -150,6 +150,15 @@ class ShareClaimOut(BaseModel):
 
 # --- Import ---
 
+class SectionSearchResult(BaseModel):
+    id: str
+    text: str
+    list_id: str
+    list_title: str
+
+
+# --- Import ---
+
 class ImportNode(BaseModel):
     type: NodeType = NodeType.item
     text: str = ""

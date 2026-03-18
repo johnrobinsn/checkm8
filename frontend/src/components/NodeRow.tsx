@@ -1,17 +1,22 @@
 import { useState, useRef, useEffect, type KeyboardEvent } from 'react'
-import type { TreeNode, NodeUpdate } from '../types'
+import type { TreeNode, NodeUpdate, SectionSearchResult } from '../types'
 import { getDueDateColor, getPriorityColor } from '../lib/tree'
+import { parseLinks, hasLinks } from '../lib/parseLinks'
+import { resolveSection } from '../api/nodes'
+import { SectionAutocomplete } from './SectionAutocomplete'
 
 interface NodeRowProps {
   node: TreeNode
   focused: boolean
   collapsed: boolean
   startEditing?: boolean
+  currentListId?: string
   onToggleCollapse: () => void
   onUpdate: (data: NodeUpdate) => void
   onFocus: () => void
   onDelete: () => void
   onEditingChange?: (editing: boolean) => void
+  onNavigateToSection?: (listId: string, sectionId: string) => void
 }
 
 export function NodeRow({
@@ -19,11 +24,13 @@ export function NodeRow({
   focused,
   collapsed,
   startEditing: startEditingProp,
+  currentListId,
   onToggleCollapse,
   onUpdate,
   onFocus,
   onDelete,
   onEditingChange,
+  onNavigateToSection,
 }: NodeRowProps) {
   const [editing, setEditingState] = useState(false)
   const [editText, setEditText] = useState(node.text)
@@ -47,6 +54,12 @@ export function NodeRow({
   const inputRef = useRef<HTMLInputElement>(null)
   const notesRef = useRef<HTMLTextAreaElement>(null)
 
+  // Autocomplete state
+  const [acQuery, setAcQuery] = useState('')
+  const [acActive, setAcActive] = useState(false)
+  const [acAnchor, setAcAnchor] = useState<{ top: number; left: number; height: number } | null>(null)
+  const acStartPos = useRef<number>(-1)
+
   useEffect(() => {
     if (editing && inputRef.current) {
       inputRef.current.focus()
@@ -63,6 +76,7 @@ export function NodeRow({
   useEffect(() => {
     if (!editing) {
       setEditText(node.text)
+      setAcActive(false)
     }
     setNotesText(node.notes || '')
   }, [node.text, node.notes])
@@ -72,6 +86,7 @@ export function NodeRow({
     committedRef.current = true
     const textToSave = editText
     setEditing(false)
+    setAcActive(false)
     if (textToSave !== node.text) {
       onUpdate({ text: textToSave })
     }
@@ -85,6 +100,13 @@ export function NodeRow({
   }
 
   const handleKeyDown = (e: KeyboardEvent) => {
+    // Let autocomplete handle these keys when active
+    if (acActive && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Escape')) {
+      return // SectionAutocomplete's global handler will catch these
+    }
+    if (acActive && e.key === 'Enter') {
+      return // autocomplete handles Enter
+    }
     if (e.key === 'Enter') {
       e.preventDefault()
       commitEdit()
@@ -92,13 +114,108 @@ export function NodeRow({
     if (e.key === 'Escape') {
       setEditText(node.text)
       setEditing(false)
+      setAcActive(false)
+    }
+  }
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value
+    const cursor = e.target.selectionStart ?? val.length
+    setEditText(val)
+
+    // Check for [[ trigger
+    const textBefore = val.slice(0, cursor)
+    const openIdx = textBefore.lastIndexOf('[[')
+    const closeIdx = textBefore.lastIndexOf(']]')
+
+    if (openIdx >= 0 && openIdx > closeIdx) {
+      // We're inside a [[ ... sequence
+      const query = textBefore.slice(openIdx + 2)
+      acStartPos.current = openIdx
+      setAcQuery(query)
+      setAcActive(true)
+      // Position the dropdown near the input
+      if (inputRef.current) {
+        const rect = inputRef.current.getBoundingClientRect()
+        setAcAnchor({ top: rect.top, left: rect.left, height: rect.height })
+      }
+    } else {
+      setAcActive(false)
+      setAcQuery('')
+    }
+  }
+
+  const handleAcSelect = (result: SectionSearchResult) => {
+    // Build the link text
+    const linkText = result.list_id === currentListId
+      ? `[[${result.text}]]`
+      : `[[${result.list_title}/${result.text}]]`
+
+    // Replace from [[ to cursor with the completed link
+    const before = editText.slice(0, acStartPos.current)
+    const cursor = inputRef.current?.selectionStart ?? editText.length
+    const after = editText.slice(cursor)
+    const newText = before + linkText + after
+    setEditText(newText)
+    setAcActive(false)
+    setAcQuery('')
+
+    // Re-focus and position cursor after the inserted link
+    setTimeout(() => {
+      if (inputRef.current) {
+        const newPos = before.length + linkText.length
+        inputRef.current.focus()
+        inputRef.current.setSelectionRange(newPos, newPos)
+      }
+    }, 0)
+  }
+
+  const handleLinkClick = async (name: string, listTitle?: string) => {
+    if (!onNavigateToSection) return
+    try {
+      const result = await resolveSection(name, listTitle, currentListId)
+      onNavigateToSection(result.list_id, result.section_id)
+    } catch {
+      // Section not found — could show a toast, but for now just ignore
     }
   }
 
   const hasChildren = node.children.length > 0
-  // Smaller indent on mobile to prevent overflow
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 640
   const indent = node.depth * (isMobile ? 16 : 24)
+
+  // Render text with links
+  const renderText = () => {
+    if (!node.text) {
+      return <span className="text-gray-400 italic">untitled</span>
+    }
+    if (!hasLinks(node.text)) {
+      return <>{node.text}</>
+    }
+    const segments = parseLinks(node.text)
+    return (
+      <>
+        {segments.map((seg, i) => {
+          if (seg.type === 'text') {
+            return <span key={i}>{seg.value}</span>
+          }
+          return (
+            <button
+              key={i}
+              className="text-blue-500 hover:text-blue-600 hover:underline cursor-pointer inline"
+              onClick={(e) => {
+                e.stopPropagation()
+                handleLinkClick(seg.name, seg.listTitle)
+              }}
+              title={seg.listTitle ? `${seg.listTitle} / ${seg.name}` : seg.name}
+            >
+              {seg.name}
+            </button>
+          )
+        })}
+      </>
+    )
+  }
 
   return (
     <div data-node-id={node.id}>
@@ -142,17 +259,33 @@ export function NodeRow({
 
         {/* Text */}
         {editing ? (
-          <input
-            ref={inputRef}
-            value={editText}
-            onChange={(e) => setEditText(e.target.value)}
-            onBlur={commitEdit}
-            onKeyDown={handleKeyDown}
-            className="flex-1 bg-transparent border-none outline-none text-gray-900 dark:text-white text-sm p-0"
-          />
+          <div className="flex-1 relative">
+            <input
+              ref={inputRef}
+              value={editText}
+              onChange={handleInputChange}
+              onBlur={() => {
+                // Delay to allow autocomplete mousedown to fire
+                setTimeout(() => {
+                  if (!acActive) commitEdit()
+                }, 150)
+              }}
+              onKeyDown={handleKeyDown}
+              className="w-full bg-transparent border-none outline-none text-gray-900 dark:text-white text-sm p-0"
+            />
+            {acActive && (
+              <SectionAutocomplete
+                query={acQuery}
+                listId={currentListId}
+                anchorRect={acAnchor}
+                onSelect={handleAcSelect}
+                onClose={() => { setAcActive(false); setAcQuery('') }}
+              />
+            )}
+          </div>
         ) : (
           <span className={`flex-1 ${node.type === 'section' ? (node.depth === 0 ? 'text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400' : 'text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500') : 'text-sm text-gray-700 dark:text-gray-300'} ${node.checked ? 'line-through' : ''}`}>
-            {node.text || <span className="text-gray-400 italic">untitled</span>}
+            {renderText()}
           </span>
         )}
 

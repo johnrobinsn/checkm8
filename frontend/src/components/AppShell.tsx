@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useTree } from '../hooks/useTree'
+import { useVisualViewport } from '../hooks/useVisualViewport'
 import { ListSidebar } from './ListSidebar'
 import { TreeView } from './TreeView'
 import { PresenceBar } from './PresenceBar'
@@ -11,6 +12,7 @@ import * as listsApi from '../api/lists'
 import type { TodoList } from '../types'
 
 export function AppShell() {
+  useVisualViewport()
   const { user } = useAuth()
   const [searchParams] = useSearchParams()
   const [selectedListId, setSelectedListId] = useState<string | null>(
@@ -18,7 +20,12 @@ export function AppShell() {
   )
   const [selectedList, setSelectedList] = useState<TodoList | null>(null)
   const [showShare, setShowShare] = useState(false)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    // On mobile, start with sidebar closed if we have a saved list to show
+    const isMobile = window.innerWidth < 1024 // lg breakpoint
+    const hasSavedList = !!(searchParams.get('list') || localStorage.getItem('checkm8_last_list'))
+    return isMobile ? !hasSavedList : true
+  })
 
   const {
     nodes,
@@ -42,7 +49,10 @@ export function AppShell() {
       localStorage.setItem('checkm8_last_list', selectedListId)
       listsApi.getList(selectedListId).then(setSelectedList).catch(() => {
         setSelectedList(null)
+        setSelectedListId(null)
         localStorage.removeItem('checkm8_last_list')
+        // Saved list gone — open sidebar so user can pick another
+        setSidebarOpen(true)
       })
     } else {
       setSelectedList(null)
@@ -97,10 +107,10 @@ export function AppShell() {
   }, [focusedId, visibleNodes, addNode])
 
   return (
-    <div className="flex h-dvh bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100">
-      {/* Mobile sidebar toggle */}
+    <div className="flex overflow-hidden bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100" style={{ height: 'var(--viewport-height, 100dvh)' }}>
+      {/* Mobile sidebar toggle — hidden when sidebar is open to avoid overlap */}
       <button
-        className="lg:hidden fixed top-3 left-3 z-40 p-3 min-w-[44px] min-h-[44px] flex items-center justify-center bg-white dark:bg-gray-800 rounded-lg shadow-md"
+        className={`lg:hidden fixed top-3 left-2 z-40 p-1.5 min-w-[36px] min-h-[36px] flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 ${sidebarOpen ? 'hidden' : ''}`}
         onClick={() => setSidebarOpen(!sidebarOpen)}
       >
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -128,7 +138,7 @@ export function AppShell() {
         {selectedList ? (
           <>
             {/* List header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 pl-14 lg:pl-4">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 pl-16 lg:pl-4">
               <h2 className="text-lg font-semibold truncate">{selectedList.title}</h2>
               <div className="flex items-center gap-3">
                 <PresenceBar users={presenceUsers} />
@@ -156,6 +166,7 @@ export function AppShell() {
                   nodes={nodes}
                   collapsed={collapsed}
                   focusedId={focusedId}
+                  currentListId={selectedListId ?? undefined}
                   onFocus={setFocusedId}
                   onToggleCollapse={toggleCollapse}
                   onUpdate={updateNode}
@@ -164,6 +175,10 @@ export function AppShell() {
                   onMoveNode={moveNode}
                   onUndo={undo}
                   onRedo={redo}
+                  onNavigateToSection={(listId, sectionId) => {
+                    setSelectedListId(listId)
+                    setFocusedId(sectionId)
+                  }}
                 />
               )}
             </div>

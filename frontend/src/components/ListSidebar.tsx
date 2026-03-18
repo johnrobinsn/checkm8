@@ -111,7 +111,7 @@ export function ListSidebar({ selectedId, onSelect, triggerNew }: ListSidebarPro
   }, [highlightIdx])
 
   return (
-    <div className="w-72 sm:w-64 h-dvh bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex flex-col flex-shrink-0">
+    <div className="w-72 sm:w-64 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex flex-col flex-shrink-0" style={{ height: 'var(--viewport-height, 100dvh)' }}>
       {/* Header */}
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between mb-3">

@@ -74,6 +74,18 @@ export interface Share {
   created_at: string
 }
 
+export interface SectionSearchResult {
+  id: string
+  text: string
+  list_id: string
+  list_title: string
+}
+
+export interface SectionResolveResult {
+  section_id: string
+  list_id: string
+}
+
 export interface TreeNode extends NodeOut {
   children: TreeNode[]
   depth: number
