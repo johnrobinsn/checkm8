@@ -240,13 +240,26 @@ export function TreeView({
 
       // Vertical reorder — requires dropping on a different node
       if (!over || active.id === over.id) return
-      const overId = over.id as string
-      const overNode = nodes.find((n) => n.id === overId)
-      if (!overNode) return
-      if (overNode.parent_id === activeId) return
+      let targetId = over.id as string
+      let targetNode = nodes.find((n) => n.id === targetId)
+      if (!targetNode) return
+      if (targetNode.parent_id === activeId) return
+
+      // If no significant horizontal drag and the over node is deeper than the
+      // active node, walk up to an ancestor at the same depth so the item stays
+      // at its current level instead of getting nested.
+      const activeDepth = getNodeDepth(nodes, activeId)
+      let targetDepth = getNodeDepth(nodes, targetId)
+      while (targetDepth > activeDepth && targetNode.parent_id) {
+        const parent = nodes.find((n) => n.id === targetNode!.parent_id)
+        if (!parent) break
+        targetNode = parent
+        targetId = parent.id
+        targetDepth--
+      }
 
       let dropAbove = false
-      const overEl = containerRef.current?.querySelector(`[data-node-id="${overId}"]`)
+      const overEl = containerRef.current?.querySelector(`[data-node-id="${targetId}"]`)
       if (overEl && activatorEvent instanceof PointerEvent) {
         const rect = overEl.getBoundingClientRect()
         const pointerY = (activatorEvent as PointerEvent).clientY + (event.delta?.y ?? 0)
@@ -256,16 +269,16 @@ export function TreeView({
 
       if (dropAbove) {
         const siblings = nodes
-          .filter((n) => n.parent_id === overNode.parent_id)
+          .filter((n) => n.parent_id === targetNode.parent_id)
           .sort((a, b) => a.position - b.position)
-        const overSibIdx = siblings.findIndex((s) => s.id === overId)
-        if (overSibIdx <= 0) {
-          onMoveNode(activeId, overNode.parent_id, null, true)
+        const targetSibIdx = siblings.findIndex((s) => s.id === targetId)
+        if (targetSibIdx <= 0) {
+          onMoveNode(activeId, targetNode.parent_id, null, true)
         } else {
-          onMoveNode(activeId, overNode.parent_id, siblings[overSibIdx - 1].id)
+          onMoveNode(activeId, targetNode.parent_id, siblings[targetSibIdx - 1].id)
         }
       } else {
-        onMoveNode(activeId, overNode.parent_id, overId)
+        onMoveNode(activeId, targetNode.parent_id, targetId)
       }
     },
     [nodes, visibleNodes, onMoveNode],
