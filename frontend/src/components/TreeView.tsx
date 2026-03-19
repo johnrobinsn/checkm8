@@ -170,18 +170,11 @@ export function TreeView({
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
       const { active, over, activatorEvent } = event
-      if (!over || active.id === over.id) return
-
       const activeId = active.id as string
-      const overId = over.id as string
       const activeNode = nodes.find((n) => n.id === activeId)
-      const overNode = nodes.find((n) => n.id === overId)
-      if (!activeNode || !overNode) return
+      if (!activeNode) return
 
-      // Prevent moving a node to be its own parent or under its own descendants
-      if (overNode.parent_id === activeId || overId === activeId) return
-
-      // Check horizontal drag for indent/outdent
+      // Check horizontal drag for indent/outdent (works even when dropped on self)
       const deltaX = event.delta?.x ?? 0
       const isMobile = window.innerWidth < 640
       const indentThreshold = isMobile ? 16 : 24
@@ -209,7 +202,13 @@ export function TreeView({
         }
       }
 
-      // Vertical reorder: determine if dropping above or below the midpoint
+      // Vertical reorder — requires dropping on a different node
+      if (!over || active.id === over.id) return
+      const overId = over.id as string
+      const overNode = nodes.find((n) => n.id === overId)
+      if (!overNode) return
+      if (overNode.parent_id === activeId) return
+
       let dropAbove = false
       const overEl = containerRef.current?.querySelector(`[data-node-id="${overId}"]`)
       if (overEl && activatorEvent instanceof PointerEvent) {
