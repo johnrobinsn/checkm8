@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import {
   DndContext,
+  DragOverlay,
   closestCenter,
   PointerSensor,
   TouchSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragStartEvent,
 } from '@dnd-kit/core'
 import {
   SortableContext,
@@ -64,10 +66,10 @@ function SortableNode({
     id: node.id,
   })
 
-  const style = {
+  const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0.3 : 1,
   }
 
   return (
@@ -108,6 +110,15 @@ export function TreeView({
   const containerRef = useRef<HTMLDivElement>(null)
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
+  const [activeId, setActiveId] = useState<string | null>(null)
+
+  // Set grabbing cursor on body during drag
+  useEffect(() => {
+    if (activeId) {
+      document.body.style.cursor = 'grabbing'
+      return () => { document.body.style.cursor = '' }
+    }
+  }, [activeId])
 
   const addNodeContextAware = useCallback((type: 'item' | 'section') => {
     const focusedNode = focusedId ? visibleNodes.find((n) => n.id === focusedId) : null
@@ -330,7 +341,13 @@ export function TreeView({
       tabIndex={0}
       onKeyDown={handleKeyDown}
     >
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)}
+        onDragEnd={(e: DragEndEvent) => { setActiveId(null); handleDragEnd(e) }}
+        onDragCancel={() => setActiveId(null)}
+      >
         <SortableContext items={visibleNodes.map((n) => n.id)} strategy={verticalListSortingStrategy}>
           {visibleNodes.length === 0 ? (
             <div className="text-center py-12 text-gray-400 dark:text-gray-500">
@@ -394,6 +411,25 @@ export function TreeView({
             </>
           )}
         </SortableContext>
+        <DragOverlay dropAnimation={null}>
+          {activeId ? (() => {
+            const node = visibleNodes.find((n) => n.id === activeId)
+            if (!node) return null
+            return (
+              <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg ring-1 ring-gray-200 dark:ring-gray-700" style={{ cursor: 'grabbing' }}>
+                <NodeRow
+                  node={node}
+                  focused={false}
+                  collapsed={collapsed.has(node.id)}
+                  onToggleCollapse={() => {}}
+                  onUpdate={() => {}}
+                  onFocus={() => {}}
+                  onDelete={() => {}}
+                />
+              </div>
+            )
+          })() : null}
+        </DragOverlay>
       </DndContext>
     </div>
   )
