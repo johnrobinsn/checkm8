@@ -45,6 +45,7 @@ function SortableNode({
   collapsed,
   startEditing,
   currentListId,
+  previewDepth,
   onToggleCollapse,
   onUpdate,
   onFocus,
@@ -59,6 +60,7 @@ function SortableNode({
   collapsed: boolean
   startEditing?: boolean
   currentListId?: string
+  previewDepth?: number | null
   onToggleCollapse: () => void
   onUpdate: (data: any) => void
   onFocus: () => void
@@ -78,10 +80,13 @@ function SortableNode({
     opacity: isDragging ? 0.3 : 1,
   }
 
+  // When dragging, show the placeholder at the preview depth
+  const displayNode = isDragging && previewDepth != null ? { ...node, depth: previewDepth } : node
+
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
       <NodeRow
-        node={node}
+        node={displayNode}
         focused={focused}
         collapsed={collapsed}
         startEditing={startEditing}
@@ -451,6 +456,7 @@ export function TreeView({
                   collapsed={collapsed.has(node.id)}
                   startEditing={node.id === editingNodeId}
                   currentListId={currentListId}
+                  previewDepth={node.id === activeId ? previewDepth : undefined}
                   onToggleCollapse={() => onToggleCollapse(node.id)}
                   onUpdate={(data) => onUpdate(node.id, data)}
                   onFocus={() => onFocus(node.id)}
