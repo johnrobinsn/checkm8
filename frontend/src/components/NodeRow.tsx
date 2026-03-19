@@ -184,27 +184,6 @@ export function NodeRow({
     }
   }
 
-  // Long-press to open detail panel (items only)
-  // Uses mousedown/mouseup instead of pointer events to avoid conflict with dnd-kit's PointerSensor
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const longPressTriggered = useRef(false)
-
-  const startLongPress = () => {
-    if (node.type !== 'item' || !onOpenDetail) return
-    longPressTriggered.current = false
-    longPressTimer.current = setTimeout(() => {
-      longPressTriggered.current = true
-      onOpenDetail()
-    }, 500)
-  }
-
-  const cancelLongPress = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current)
-      longPressTimer.current = null
-    }
-  }
-
   // Context menu state
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
 
@@ -318,11 +297,6 @@ export function NodeRow({
         onClick={onFocus}
         onDoubleClick={() => setEditing(true)}
         onContextMenu={handleContextMenu}
-        onMouseDown={startLongPress}
-        onMouseUp={cancelLongPress}
-        onMouseLeave={cancelLongPress}
-        onTouchStart={startLongPress}
-        onTouchEnd={cancelLongPress}
         tabIndex={-1}
       >
         {/* Collapse/expand toggle */}
@@ -420,17 +394,30 @@ export function NodeRow({
           </button>
         )}
 
-        {/* Delete */}
-        <button
-          className="p-1 text-gray-400 hover:text-red-500 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0"
-          onClick={(e) => { e.stopPropagation(); onDelete() }}
-          tabIndex={-1}
-          title="Delete"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-          </svg>
-        </button>
+        {/* Detail button (items) / Delete button (sections) */}
+        {node.type === 'item' && onOpenDetail ? (
+          <button
+            className="p-1 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0"
+            onClick={(e) => { e.stopPropagation(); onOpenDetail() }}
+            tabIndex={-1}
+            title="Details"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </button>
+        ) : (
+          <button
+            className="p-1 text-gray-400 hover:text-red-500 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0"
+            onClick={(e) => { e.stopPropagation(); onDelete() }}
+            tabIndex={-1}
+            title="Delete"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Context menu */}
