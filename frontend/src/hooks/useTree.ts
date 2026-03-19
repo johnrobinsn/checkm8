@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { NodeCreate, NodeOut, NodeUpdate, PresenceUser, WsMessage } from '../types'
 import { buildTree, getVisibleNodes } from '../lib/tree'
 import * as nodesApi from '../api/nodes'
@@ -59,7 +59,17 @@ export function useTree(listId: string | null) {
 
   useWebSocket(listId, handleWsMessage)
 
-  const tree = buildTree(nodes)
+  // Deduplicate nodes — guards against races between fetch, optimistic add, and WS
+  const uniqueNodes = useMemo(() => {
+    const seen = new Set<string>()
+    return nodes.filter((n) => {
+      if (seen.has(n.id)) return false
+      seen.add(n.id)
+      return true
+    })
+  }, [nodes])
+
+  const tree = buildTree(uniqueNodes)
   const visibleNodes = getVisibleNodes(tree, collapsed)
 
   const toggleCollapse = useCallback((nodeId: string) => {
@@ -74,7 +84,7 @@ export function useTree(listId: string | null) {
   const addNode = useCallback(async (data: NodeCreate) => {
     if (!listId) return null
     const node = await nodesApi.createNode(listId, data)
-    setNodes((prev) => [...prev, node])
+    setNodes((prev) => prev.some((n) => n.id === node.id) ? prev : [...prev, node])
     setFocusedId(node.id)
 
     // Register undo (delete the node)
