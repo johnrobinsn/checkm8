@@ -78,6 +78,7 @@ function SortableNode({
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.3 : 1,
+    touchAction: 'none',
   }
 
   // When dragging, show the placeholder at the preview depth
