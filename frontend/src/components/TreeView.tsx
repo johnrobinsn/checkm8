@@ -484,7 +484,7 @@ export function TreeView({
             return (
               <div
                 className="bg-white dark:bg-gray-900 rounded-lg shadow-lg ring-1 ring-gray-200 dark:ring-gray-700 transition-transform duration-100"
-                style={{ cursor: 'grabbing', transform: `translateX(${offsetX}px)` }}
+                style={{ cursor: 'grabbing', opacity: 0.5, transform: `translateX(${offsetX}px)` }}
               >
                 <NodeRow
                   node={node}
