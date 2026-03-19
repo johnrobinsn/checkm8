@@ -106,6 +106,7 @@ class NodeUpdate(BaseModel):
     notes: str | None = None
     priority: Priority | None = None
     due_date: str | None = None
+    pinned: bool | None = None
 
 
 class NodeMove(BaseModel):
@@ -124,6 +125,7 @@ class NodeOut(BaseModel):
     priority: Priority | None = None
     due_date: str | None = None
     position: float
+    pinned: bool = False
     created_at: str
     updated_at: str
 

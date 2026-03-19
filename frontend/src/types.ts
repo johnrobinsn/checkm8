@@ -37,6 +37,7 @@ export interface NodeOut {
   priority: Priority | null
   due_date: string | null
   position: number
+  pinned: boolean
   created_at: string
   updated_at: string
 }
@@ -58,6 +59,7 @@ export interface NodeUpdate {
   notes?: string | null
   priority?: Priority | null
   due_date?: string | null
+  pinned?: boolean
 }
 
 export interface NodeMove {

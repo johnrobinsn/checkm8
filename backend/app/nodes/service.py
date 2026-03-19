@@ -114,13 +114,13 @@ async def update_node(db: aiosqlite.Connection, node_id: str, updates: dict) -> 
     set_clauses = []
     values = []
     nullable_fields = {"notes", "priority", "due_date"}
-    for key in ("text", "checked", "notes", "priority", "due_date"):
+    for key in ("text", "checked", "notes", "priority", "due_date", "pinned"):
         if key not in updates:
             continue
         # Allow nullable fields to be set to None (to clear them)
         if updates[key] is None and key not in nullable_fields:
             continue
-        if key == "checked":
+        if key in ("checked", "pinned"):
             set_clauses.append(f"{key} = ?")
             values.append(int(updates[key]))
         else:

@@ -65,10 +65,24 @@ def resolve_list_id(lists: list[dict], prefix: str) -> dict | None:
 
 
 def resolve_node_id(nodes: list[dict], prefix: str) -> dict | None:
-    """Resolve a node by ID prefix or exact text match."""
+    """Resolve a node by #index, ID prefix, or exact text match.
+
+    Supported formats:
+      - #3        → 3rd node (1-based index in position order)
+      - abc123    → ID prefix match
+      - Buy milk  → exact text match (case-insensitive)
+    """
+    # Index reference: #1, #2, etc.
+    if prefix.startswith("#") and prefix[1:].isdigit():
+        idx = int(prefix[1:]) - 1  # 1-based to 0-based
+        sorted_nodes = sorted(nodes, key=lambda n: n["position"])
+        if 0 <= idx < len(sorted_nodes):
+            return sorted_nodes[idx]
+        print(f"Error: Index {prefix} out of range (list has {len(nodes)} nodes).", file=sys.stderr)
+        sys.exit(1)
     # Exact text match first
     for node in nodes:
-        if node["text"].lower() == prefix.lower():
+        if node["text"] and node["text"].lower() == prefix.lower():
             return node
     # ID prefix match
     matches = [n for n in nodes if n["id"].startswith(prefix)]

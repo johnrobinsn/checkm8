@@ -12,7 +12,7 @@ router = APIRouter(prefix="/lists/{list_id}/nodes", tags=["nodes"])
 
 
 def _node_out(node: dict) -> NodeOut:
-    return NodeOut(**{**node, "checked": bool(node["checked"])})
+    return NodeOut(**{**node, "checked": bool(node["checked"]), "pinned": bool(node.get("pinned", 0))})
 
 
 @router.get("", response_model=list[NodeOut])

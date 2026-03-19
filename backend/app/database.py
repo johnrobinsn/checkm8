@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS nodes (
     priority TEXT CHECK(priority IN ('high', 'medium', 'low', NULL)),
     due_date TEXT,
     position REAL NOT NULL,
+    pinned INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -85,4 +86,9 @@ async def init_db(db_path: str | None = None):
     async with aiosqlite.connect(path) as db:
         await db.execute("PRAGMA foreign_keys=ON")
         await db.executescript(SCHEMA)
+        # Migration: add pinned column if missing
+        try:
+            await db.execute("ALTER TABLE nodes ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0")
+        except Exception:
+            pass  # column already exists
         await db.commit()

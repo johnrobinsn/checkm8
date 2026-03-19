@@ -21,9 +21,13 @@ export function buildTree(nodes: NodeOut[]): TreeNode[] {
     }
   }
 
-  // Sort children by position
+  // Sort children by position, pinned sections first
   const sortChildren = (nodes: TreeNode[]) => {
-    nodes.sort((a, b) => a.position - b.position)
+    nodes.sort((a, b) => {
+      // Pinned sections float to top
+      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
+      return a.position - b.position
+    })
     for (const n of nodes) sortChildren(n.children)
   }
   sortChildren(roots)

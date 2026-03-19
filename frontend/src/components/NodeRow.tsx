@@ -289,6 +289,20 @@ export function NodeRow({
           </span>
         )}
 
+        {/* Pin indicator & toggle for sections */}
+        {node.type === 'section' && (
+          <button
+            className={`p-1 flex-shrink-0 transition-opacity ${node.pinned ? 'text-blue-500 !opacity-100' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 sm:opacity-0 sm:group-hover:opacity-100'}`}
+            onClick={(e) => { e.stopPropagation(); onUpdate({ pinned: !node.pinned }) }}
+            tabIndex={-1}
+            title={node.pinned ? 'Unpin section' : 'Pin to top'}
+          >
+            <svg className="w-3.5 h-3.5" fill={node.pinned ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+            </svg>
+          </button>
+        )}
+
         {/* Due date */}
         {node.due_date && (
           <span className={`text-xs flex-shrink-0 ${getDueDateColor(node.due_date)}`}>
