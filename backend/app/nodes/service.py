@@ -166,6 +166,18 @@ async def move_node(
     if not node:
         raise ValueError("Node not found")
 
+    # Prevent self-referencing and circular parent chains
+    if new_parent_id == node_id:
+        raise ValueError("Cannot move a node to be its own parent")
+    if new_parent_id is not None:
+        # Walk up from new_parent to ensure node_id isn't an ancestor
+        current = new_parent_id
+        while current:
+            if current == node_id:
+                raise ValueError("Cannot move a node under one of its own descendants")
+            parent_row = await db.execute_fetchall("SELECT parent_id FROM nodes WHERE id = ?", (current,))
+            current = parent_row[0]["parent_id"] if parent_row else None
+
     # Validate depth: new parent depth + subtree depth of moving node must be <= 5
     if new_parent_id is not None:
         new_parent_depth = await _get_depth(db, new_parent_id)

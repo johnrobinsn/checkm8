@@ -177,6 +177,9 @@ export function TreeView({
       const overNode = nodes.find((n) => n.id === overId)
       if (!overNode) return
 
+      // Prevent moving a node to be its own parent or under its own descendants
+      if (overNode.parent_id === activeId || overId === activeId) return
+
       // Determine if dropping above or below the midpoint of the target
       let dropAbove = false
       const overEl = containerRef.current?.querySelector(`[data-node-id="${overId}"]`)
