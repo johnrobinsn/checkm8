@@ -69,14 +69,17 @@ export function ItemDetailPanel({ node, onUpdate, onDelete, onClose }: ItemDetai
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/30 z-50 transition-opacity"
+        className="fixed inset-0 bg-black/30 z-[60] transition-opacity"
         onClick={onClose}
+        onTouchEnd={(e) => { e.stopPropagation(); onClose() }}
       />
 
-      {/* Panel */}
+      {/* Panel — stopPropagation prevents dnd-kit TouchSensor from intercepting */}
       <div
         ref={panelRef}
-        className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 rounded-t-2xl shadow-2xl max-h-[85vh] overflow-y-auto sm:max-w-lg sm:mx-auto sm:bottom-4 sm:left-4 sm:right-4 sm:rounded-2xl"
+        className="fixed bottom-0 left-0 right-0 z-[61] bg-white dark:bg-gray-900 rounded-t-2xl shadow-2xl max-h-[85vh] overflow-y-auto sm:max-w-lg sm:mx-auto sm:bottom-4 sm:left-4 sm:right-4 sm:rounded-2xl"
+        onPointerDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
       >
         {/* Drag handle indicator */}
         <div className="flex justify-center pt-3 pb-1 sm:hidden">
