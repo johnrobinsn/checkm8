@@ -31,7 +31,7 @@ export function useTree(listId: string | null) {
   const handleWsMessage = useCallback((msg: WsMessage) => {
     switch (msg.type) {
       case 'node_created':
-        setNodes((prev) => [...prev, msg.node])
+        setNodes((prev) => prev.some((n) => n.id === msg.node.id) ? prev : [...prev, msg.node])
         break
       case 'node_updated':
         setNodes((prev) => prev.map((n) => (n.id === msg.node.id ? msg.node : n)))

@@ -111,6 +111,9 @@ export function AppShell() {
     return crumbs
   })()
 
+  // Quick-add state
+  const [quickAddText, setQuickAddText] = useState('')
+
   // FAB state
   const [fabMenuOpen, setFabMenuOpen] = useState(false)
   const fabTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -203,32 +206,37 @@ export function AppShell() {
             </nav>
 
             {/* Quick-add input */}
-            <div className="px-3 sm:px-4 py-2 border-b border-gray-100 dark:border-gray-800">
-              <form onSubmit={(e) => e.preventDefault()}>
-                <input
-                  name="quickadd"
-                  type="text"
-                  placeholder="Add a new item..."
-                  className="w-full px-3 py-2 text-sm bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      const val = e.currentTarget.value.trim()
-                      if (!val) return
-                      // Determine where to add based on focused context
-                      const focusedNode = focusedId ? visibleNodes.find((n) => n.id === focusedId) : null
-                      if (focusedNode && focusedNode.type === 'section') {
-                        addNode({ type: 'item', text: val, parent_id: focusedNode.id, at_beginning: true })
-                      } else if (focusedNode) {
-                        addNode({ type: 'item', text: val, parent_id: focusedNode.parent_id, after_id: focusedNode.id })
-                      } else {
-                        addNode({ type: 'item', text: val })
-                      }
-                      e.currentTarget.value = ''
+            <div className="px-3 sm:px-4 py-2 border-b border-gray-100 dark:border-gray-800 flex items-center gap-2">
+              <input
+                type="text"
+                value={quickAddText}
+                onChange={(e) => setQuickAddText(e.target.value)}
+                placeholder="Add a new item..."
+                className="flex-1 px-3 py-2 text-sm bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    const val = quickAddText.trim()
+                    if (!val) return
+                    const focusedNode = focusedId ? visibleNodes.find((n) => n.id === focusedId) : null
+                    if (focusedNode && focusedNode.type === 'section') {
+                      addNode({ type: 'item', text: val, parent_id: focusedNode.id, at_beginning: true })
+                    } else if (focusedNode) {
+                      addNode({ type: 'item', text: val, parent_id: focusedNode.parent_id, after_id: focusedNode.id })
+                    } else {
+                      addNode({ type: 'item', text: val })
                     }
-                  }}
-                />
-              </form>
+                    setQuickAddText('')
+                  }
+                }}
+              />
+              <button
+                onClick={() => addNodeContextAware('section')}
+                className="px-3 py-2 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg flex-shrink-0 transition-colors"
+                title="Add section"
+              >
+                + Section
+              </button>
             </div>
 
             {/* Tree content */}
