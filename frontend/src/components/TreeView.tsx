@@ -51,6 +51,7 @@ function SortableNode({
   onEditingChange,
   onNavigateToSection,
   onOpenDetail,
+  onPaste,
 }: {
   node: TreeNode
   focused: boolean
@@ -64,6 +65,7 @@ function SortableNode({
   onEditingChange?: (editing: boolean) => void
   onNavigateToSection?: (listId: string, sectionId: string) => void
   onOpenDetail?: () => void
+  onPaste?: (data: any) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: node.id,
@@ -90,6 +92,7 @@ function SortableNode({
         onEditingChange={onEditingChange}
         onNavigateToSection={onNavigateToSection}
         onOpenDetail={onOpenDetail}
+        onPaste={onPaste}
       />
     </div>
   )
@@ -392,6 +395,7 @@ export function TreeView({
                   }}
                   onNavigateToSection={onNavigateToSection}
                   onOpenDetail={() => setDetailNodeId(node.id)}
+                  onPaste={(data) => onAddNode({ ...data, parent_id: node.parent_id, after_id: node.id })}
                 />
               ))}
               <div className="mt-3 ml-1 sm:ml-2 flex items-center gap-1 sm:gap-2">

@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, type KeyboardEvent } from 'react'
-import type { TreeNode, NodeUpdate, SectionSearchResult } from '../types'
+import { useState, useRef, useEffect, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
+import type { TreeNode, NodeUpdate, NodeCreate, SectionSearchResult } from '../types'
 import { getDueDateColor, getPriorityColor } from '../lib/tree'
 import { parseLinks, hasLinks } from '../lib/parseLinks'
 import { resolveSection } from '../api/nodes'
@@ -18,6 +18,7 @@ interface NodeRowProps {
   onEditingChange?: (editing: boolean) => void
   onNavigateToSection?: (listId: string, sectionId: string) => void
   onOpenDetail?: () => void
+  onPaste?: (data: NodeCreate) => void
 }
 
 export function NodeRow({
@@ -33,6 +34,7 @@ export function NodeRow({
   onEditingChange,
   onNavigateToSection,
   onOpenDetail,
+  onPaste,
 }: NodeRowProps) {
   const [editing, setEditingState] = useState(false)
   const [editText, setEditText] = useState(node.text)
@@ -183,10 +185,11 @@ export function NodeRow({
   }
 
   // Long-press to open detail panel (items only)
+  // Uses mousedown/mouseup instead of pointer events to avoid conflict with dnd-kit's PointerSensor
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const longPressTriggered = useRef(false)
 
-  const handlePointerDown = () => {
+  const startLongPress = () => {
     if (node.type !== 'item' || !onOpenDetail) return
     longPressTriggered.current = false
     longPressTimer.current = setTimeout(() => {
@@ -195,17 +198,75 @@ export function NodeRow({
     }, 500)
   }
 
-  const handlePointerUp = () => {
+  const cancelLongPress = () => {
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current)
       longPressTimer.current = null
     }
   }
 
-  const handlePointerLeave = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current)
-      longPressTimer.current = null
+  // Context menu state
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
+
+  const handleContextMenu = (e: ReactMouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setCtxMenu({ x: e.clientX, y: e.clientY })
+  }
+
+  // Close context menu on outside click or Escape
+  useEffect(() => {
+    if (!ctxMenu) return
+    const handleClick = () => setCtxMenu(null)
+    const handleKey = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') setCtxMenu(null) }
+    window.addEventListener('click', handleClick)
+    window.addEventListener('keydown', handleKey)
+    return () => {
+      window.removeEventListener('click', handleClick)
+      window.removeEventListener('keydown', handleKey)
+    }
+  }, [ctxMenu])
+
+  const serializeNode = () => ({
+    _checkm8: true,
+    type: node.type,
+    text: node.text,
+    checked: node.checked,
+    notes: node.notes,
+    priority: node.priority,
+    due_date: node.due_date,
+    pinned: node.pinned,
+  })
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(JSON.stringify(serializeNode()))
+    setCtxMenu(null)
+  }
+
+  const handleCut = async () => {
+    await navigator.clipboard.writeText(JSON.stringify(serializeNode()))
+    setCtxMenu(null)
+    onDelete()
+  }
+
+  const handlePaste = async () => {
+    setCtxMenu(null)
+    if (!onPaste) return
+    try {
+      const text = await navigator.clipboard.readText()
+      const data = JSON.parse(text)
+      if (data._checkm8) {
+        onPaste({
+          type: data.type || 'item',
+          text: data.text || '',
+          checked: data.checked || false,
+          notes: data.notes || null,
+          priority: data.priority || null,
+          due_date: data.due_date || null,
+        })
+      }
+    } catch {
+      // Invalid clipboard content — ignore
     }
   }
 
@@ -256,15 +317,12 @@ export function NodeRow({
         style={{ paddingLeft: `${indent + 8}px` }}
         onClick={onFocus}
         onDoubleClick={() => setEditing(true)}
-        onContextMenu={(e) => {
-          if (node.type === 'item' && onOpenDetail) {
-            e.preventDefault()
-            onOpenDetail()
-          }
-        }}
-        onPointerDown={handlePointerDown}
-        onPointerUp={handlePointerUp}
-        onPointerLeave={handlePointerLeave}
+        onContextMenu={handleContextMenu}
+        onMouseDown={startLongPress}
+        onMouseUp={cancelLongPress}
+        onMouseLeave={cancelLongPress}
+        onTouchStart={startLongPress}
+        onTouchEnd={cancelLongPress}
         tabIndex={-1}
       >
         {/* Collapse/expand toggle */}
@@ -374,6 +432,20 @@ export function NodeRow({
           </svg>
         </button>
       </div>
+
+      {/* Context menu */}
+      {ctxMenu && (
+        <div
+          className="fixed z-50 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded py-0.5 min-w-[100px]"
+          style={{ top: ctxMenu.y, left: ctxMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button className="w-full px-3 py-1 text-left text-xs text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800" onClick={handleCut}>Cut</button>
+          <button className="w-full px-3 py-1 text-left text-xs text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800" onClick={handleCopy}>Copy</button>
+          <div className="mx-2 my-0.5 border-t border-gray-100 dark:border-gray-800" />
+          <button className="w-full px-3 py-1 text-left text-xs text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-30" onClick={handlePaste} disabled={!onPaste}>Paste</button>
+        </div>
+      )}
 
       {/* Inline notes */}
       {showNotes && (
