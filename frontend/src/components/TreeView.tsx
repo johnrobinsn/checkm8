@@ -471,11 +471,17 @@ export function TreeView({
           {activeId ? (() => {
             const node = visibleNodes.find((n) => n.id === activeId)
             if (!node) return null
-            const previewNode = previewDepth != null ? { ...node, depth: previewDepth } : node
+            const isMob = window.innerWidth < 640
+            const indentPx = isMob ? 16 : 24
+            const depthDiff = (previewDepth ?? node.depth) - node.depth
+            const offsetX = depthDiff * indentPx
             return (
-              <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg ring-1 ring-gray-200 dark:ring-gray-700" style={{ cursor: 'grabbing' }}>
+              <div
+                className="bg-white dark:bg-gray-900 rounded-lg shadow-lg ring-1 ring-gray-200 dark:ring-gray-700 transition-transform duration-100"
+                style={{ cursor: 'grabbing', transform: `translateX(${offsetX}px)` }}
+              >
                 <NodeRow
-                  node={previewNode}
+                  node={node}
                   focused={false}
                   collapsed={collapsed.has(node.id)}
                   onToggleCollapse={() => {}}
