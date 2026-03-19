@@ -119,10 +119,20 @@ export function AppShell() {
   const fabTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const fabLongPressedRef = useRef(false)
 
+  const addSectionWithPrompt = useCallback(() => {
+    const name = prompt('Section name:')
+    if (!name?.trim()) return
+    addNode({ type: 'section', text: name.trim() })
+  }, [addNode])
+
   const addNodeContextAware = useCallback((type: 'item' | 'section') => {
+    if (type === 'section') {
+      addSectionWithPrompt()
+      return
+    }
     const focusedNode = focusedId ? visibleNodes.find((n) => n.id === focusedId) : null
     if (focusedNode) {
-      if (type === 'item' && focusedNode.type === 'section') {
+      if (focusedNode.type === 'section') {
         addNode({ type, text: '', parent_id: focusedNode.id, at_beginning: true })
       } else {
         addNode({ type, text: '', parent_id: focusedNode.parent_id, after_id: focusedNode.id })
@@ -130,7 +140,7 @@ export function AppShell() {
     } else {
       addNode({ type, text: '' })
     }
-  }, [focusedId, visibleNodes, addNode])
+  }, [focusedId, visibleNodes, addNode, addSectionWithPrompt])
 
   return (
     <div className="flex overflow-hidden bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100" style={{ height: 'var(--viewport-height, 100dvh)' }}>
@@ -206,13 +216,13 @@ export function AppShell() {
             </nav>
 
             {/* Quick-add input */}
-            <div className="px-3 sm:px-4 py-2 border-b border-gray-100 dark:border-gray-800 flex items-center gap-2">
+            <div className="px-3 sm:px-4 py-2 border-b border-gray-100 dark:border-gray-800">
               <input
                 type="text"
                 value={quickAddText}
                 onChange={(e) => setQuickAddText(e.target.value)}
                 placeholder="Add a new item..."
-                className="flex-1 px-3 py-2 text-sm bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                className="w-full px-3 py-2 text-sm bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault()
@@ -230,13 +240,6 @@ export function AppShell() {
                   }
                 }}
               />
-              <button
-                onClick={() => addNodeContextAware('section')}
-                className="px-3 py-2 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg flex-shrink-0 transition-colors"
-                title="Add section"
-              >
-                + Section
-              </button>
             </div>
 
             {/* Tree content */}

@@ -128,20 +128,28 @@ export function TreeView({
     }
   }, [activeId])
 
+  const addSectionWithPrompt = useCallback(() => {
+    const name = prompt('Section name:')
+    if (!name?.trim()) return
+    onAddNode({ type: 'section', text: name.trim() })
+  }, [onAddNode])
+
   const addNodeContextAware = useCallback((type: 'item' | 'section') => {
+    if (type === 'section') {
+      addSectionWithPrompt()
+      return
+    }
     const focusedNode = focusedId ? visibleNodes.find((n) => n.id === focusedId) : null
     if (focusedNode) {
-      if (type === 'item' && focusedNode.type === 'section') {
-        // Add item as first child of focused section
+      if (focusedNode.type === 'section') {
         onAddNode({ type, text: '', parent_id: focusedNode.id, at_beginning: true })
       } else {
-        // Add as sibling after focused node (works for both items and sections)
         onAddNode({ type, text: '', parent_id: focusedNode.parent_id, after_id: focusedNode.id })
       }
     } else {
       onAddNode({ type, text: '' })
     }
-  }, [focusedId, visibleNodes, onAddNode])
+  }, [focusedId, visibleNodes, onAddNode, addSectionWithPrompt])
 
   // Auto-focus tree container so keyboard shortcuts work immediately
   useEffect(() => {
