@@ -88,6 +88,29 @@ export function AppShell() {
 
   const isOwner = selectedList?.owner_id === user?.id
 
+  // Build breadcrumb trail from focused node to root
+  const breadcrumbs = (() => {
+    const crumbs: { id: string | null; label: string }[] = []
+    if (!selectedList) return crumbs
+    // Walk up from focused node to build ancestor chain
+    if (focusedId) {
+      let currentId: string | null = focusedId
+      const nodeMap = new Map(nodes.map((n) => [n.id, n]))
+      while (currentId) {
+        const n = nodeMap.get(currentId)
+        if (!n) break
+        // Only include sections in breadcrumb, not items
+        if (n.type === 'section') {
+          crumbs.unshift({ id: n.id, label: n.text || 'Untitled' })
+        }
+        currentId = n.parent_id
+      }
+    }
+    // Prepend list name
+    crumbs.unshift({ id: null, label: selectedList.title })
+    return crumbs
+  })()
+
   // FAB state
   const [fabMenuOpen, setFabMenuOpen] = useState(false)
   const fabTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -108,16 +131,6 @@ export function AppShell() {
 
   return (
     <div className="flex overflow-hidden bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100" style={{ height: 'var(--viewport-height, 100dvh)' }}>
-      {/* Mobile sidebar toggle — hidden when sidebar is open to avoid overlap */}
-      <button
-        className={`lg:hidden fixed top-3 left-2 z-40 p-1.5 min-w-[36px] min-h-[36px] flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 ${sidebarOpen ? 'hidden' : ''}`}
-        onClick={() => setSidebarOpen(!sidebarOpen)}
-      >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
-      </button>
-
       {/* Sidebar - overlay on mobile */}
       {sidebarOpen && (
         <div
@@ -137,10 +150,20 @@ export function AppShell() {
       <div className="flex-1 flex flex-col min-w-0">
         {selectedList ? (
           <>
-            {/* List header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 pl-16 lg:pl-4">
-              <h2 className="text-lg font-semibold truncate">{selectedList.title}</h2>
-              <div className="flex items-center gap-3">
+            {/* App bar */}
+            <div className="flex items-center justify-between px-3 sm:px-4 py-2.5 border-b border-gray-200 dark:border-gray-700 gap-2">
+              <div className="flex items-center gap-1 min-w-0">
+                <button
+                  className={`lg:hidden p-1.5 flex-shrink-0 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 ${sidebarOpen ? 'hidden' : ''}`}
+                  onClick={() => setSidebarOpen(true)}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </button>
+                <h2 className="text-base font-semibold truncate">{selectedList.title}</h2>
+              </div>
+              <div className="flex items-center gap-3 flex-shrink-0">
                 <PresenceBar users={presenceUsers} />
                 <button
                   onClick={() => setShowShare(true)}
@@ -149,9 +172,63 @@ export function AppShell() {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                   </svg>
-                  Share
+                  <span className="hidden sm:inline">Share</span>
                 </button>
               </div>
+            </div>
+
+            {/* Breadcrumb */}
+            <nav className="flex items-center px-3 sm:px-4 py-1.5 text-xs text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-800 min-w-0">
+              <button
+                className="hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0"
+                onClick={() => setSidebarOpen(true)}
+              >
+                Lists
+              </button>
+              {breadcrumbs.map((crumb, i) => (
+                <span key={crumb.id ?? 'root'} className="flex items-center min-w-0">
+                  <span className="mx-1 text-gray-300 dark:text-gray-600 flex-shrink-0">/</span>
+                  {i === breadcrumbs.length - 1 ? (
+                    <span className="text-gray-600 dark:text-gray-300 truncate">{crumb.label}</span>
+                  ) : (
+                    <button
+                      className="hover:text-gray-600 dark:hover:text-gray-300 truncate"
+                      onClick={() => { if (crumb.id) setFocusedId(crumb.id); else setFocusedId(null) }}
+                    >
+                      {crumb.label}
+                    </button>
+                  )}
+                </span>
+              ))}
+            </nav>
+
+            {/* Quick-add input */}
+            <div className="px-3 sm:px-4 py-2 border-b border-gray-100 dark:border-gray-800">
+              <form onSubmit={(e) => e.preventDefault()}>
+                <input
+                  name="quickadd"
+                  type="text"
+                  placeholder="Add a new item..."
+                  className="w-full px-3 py-2 text-sm bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      const val = e.currentTarget.value.trim()
+                      if (!val) return
+                      // Determine where to add based on focused context
+                      const focusedNode = focusedId ? visibleNodes.find((n) => n.id === focusedId) : null
+                      if (focusedNode && focusedNode.type === 'section') {
+                        addNode({ type: 'item', text: val, parent_id: focusedNode.id, at_beginning: true })
+                      } else if (focusedNode) {
+                        addNode({ type: 'item', text: val, parent_id: focusedNode.parent_id, after_id: focusedNode.id })
+                      } else {
+                        addNode({ type: 'item', text: val })
+                      }
+                      e.currentTarget.value = ''
+                    }
+                  }}
+                />
+              </form>
             </div>
 
             {/* Tree content */}
