@@ -170,7 +170,7 @@ export function TreeView({
       activationConstraint: { distance: 8 },
     }),
     useSensor(TouchSensor, {
-      activationConstraint: { delay: 600, tolerance: 5 },
+      activationConstraint: { delay: 600, tolerance: 30 },
     }),
   )
 
