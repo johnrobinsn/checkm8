@@ -129,10 +129,10 @@ export function useTree(listId: string | null) {
     }
   }, [listId, uniqueNodes, execute])
 
-  const moveNodeAction = useCallback(async (nodeId: string, parentId: string | null, afterId: string | null) => {
+  const moveNodeAction = useCallback(async (nodeId: string, parentId: string | null, afterId: string | null, atBeginning?: boolean) => {
     if (!listId) return
     const oldNode = uniqueNodes.find((n) => n.id === nodeId)
-    const moved = await nodesApi.moveNode(listId, nodeId, { parent_id: parentId, after_id: afterId })
+    const moved = await nodesApi.moveNode(listId, nodeId, { parent_id: parentId, after_id: afterId, at_beginning: atBeginning })
     setNodes((prev) => prev.map((n) => (n.id === nodeId ? moved : n)))
 
     if (oldNode) {

@@ -66,6 +66,7 @@ export interface NodeUpdate {
 export interface NodeMove {
   parent_id?: string | null
   after_id?: string | null
+  at_beginning?: boolean
 }
 
 export interface Share {

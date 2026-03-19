@@ -32,7 +32,7 @@ interface TreeViewProps {
   onUpdate: (nodeId: string, data: any) => void
   onDelete: (nodeId: string) => void
   onAddNode: (data: any) => void
-  onMoveNode: (nodeId: string, parentId: string | null, afterId: string | null) => void
+  onMoveNode: (nodeId: string, parentId: string | null, afterId: string | null, atBeginning?: boolean) => void
   onUndo: () => void
   onRedo: () => void
   onNavigateToSection?: (listId: string, sectionId: string) => void
@@ -224,7 +224,7 @@ export function TreeView({
           .sort((a, b) => a.position - b.position)
         const overSibIdx = siblings.findIndex((s) => s.id === overId)
         if (overSibIdx <= 0) {
-          onMoveNode(activeId, overNode.parent_id, null)
+          onMoveNode(activeId, overNode.parent_id, null, true)
         } else {
           onMoveNode(activeId, overNode.parent_id, siblings[overSibIdx - 1].id)
         }
