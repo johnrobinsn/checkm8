@@ -50,7 +50,8 @@ export function useWebSocket(
     return () => {
       clearTimeout(reconnectTimer)
       if (wsRef.current) {
-        wsRef.current.onclose = null // prevent reconnect
+        wsRef.current.onmessage = null // prevent ghost messages during close
+        wsRef.current.onclose = null   // prevent reconnect
         wsRef.current.close()
       }
       setConnected(false)

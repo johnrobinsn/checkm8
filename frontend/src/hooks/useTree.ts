@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { NodeCreate, NodeOut, NodeUpdate, PresenceUser, WsMessage } from '../types'
 import { buildTree, getVisibleNodes } from '../lib/tree'
 import * as nodesApi from '../api/nodes'
@@ -13,18 +13,26 @@ export function useTree(listId: string | null) {
   const [loading, setLoading] = useState(false)
   const { execute, undo, redo } = useUndoRedo()
 
-  // Fetch nodes when listId changes
+  // Fetch nodes when listId changes — with AbortController to cancel stale fetches
   useEffect(() => {
     if (!listId) {
       setNodes([])
       return
     }
+    const controller = new AbortController()
     setLoading(true)
     nodesApi.getNodes(listId).then((data) => {
-      setNodes(data)
-      setCollapsed(new Set())
-      setFocusedId(null)
-    }).finally(() => setLoading(false))
+      if (!controller.signal.aborted) {
+        setNodes(data)
+        setCollapsed(new Set())
+        setFocusedId(null)
+      }
+    }).finally(() => {
+      if (!controller.signal.aborted) {
+        setLoading(false)
+      }
+    })
+    return () => controller.abort()
   }, [listId])
 
   // WebSocket handler
@@ -100,7 +108,7 @@ export function useTree(listId: string | null) {
 
   const updateNode = useCallback(async (nodeId: string, data: NodeUpdate) => {
     if (!listId) return
-    const oldNode = nodes.find((n) => n.id === nodeId)
+    const oldNode = uniqueNodes.find((n) => n.id === nodeId)
     const updated = await nodesApi.updateNode(listId, nodeId, data)
     setNodes((prev) => prev.map((n) => (n.id === nodeId ? updated : n)))
 
@@ -119,18 +127,18 @@ export function useTree(listId: string | null) {
         },
       })
     }
-  }, [listId, nodes, execute])
+  }, [listId, uniqueNodes, execute])
 
   const moveNodeAction = useCallback(async (nodeId: string, parentId: string | null, afterId: string | null) => {
     if (!listId) return
-    const oldNode = nodes.find((n) => n.id === nodeId)
+    const oldNode = uniqueNodes.find((n) => n.id === nodeId)
     const moved = await nodesApi.moveNode(listId, nodeId, { parent_id: parentId, after_id: afterId })
     setNodes((prev) => prev.map((n) => (n.id === nodeId ? moved : n)))
 
     if (oldNode) {
       const oldParentId = oldNode.parent_id
       // Find old previous sibling for undo
-      const oldSiblings = nodes
+      const oldSiblings = uniqueNodes
         .filter((n) => n.parent_id === oldParentId && n.id !== nodeId)
         .sort((a, b) => a.position - b.position)
       const oldIdx = oldSiblings.findIndex((s) => s.position > oldNode.position)
@@ -144,7 +152,7 @@ export function useTree(listId: string | null) {
         },
       })
     }
-  }, [listId, nodes, execute])
+  }, [listId, uniqueNodes, execute])
 
   const removeNode = useCallback(async (nodeId: string) => {
     if (!listId) return
@@ -161,7 +169,7 @@ export function useTree(listId: string | null) {
   }, [listId])
 
   return {
-    nodes,
+    nodes: uniqueNodes,
     tree,
     visibleNodes,
     collapsed,
