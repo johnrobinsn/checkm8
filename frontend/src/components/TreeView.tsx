@@ -18,6 +18,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import type { TreeNode, NodeOut } from '../types'
 import { NodeRow } from './NodeRow'
+import { ItemDetailPanel } from './ItemDetailPanel'
 import { getNodeDepth } from '../lib/tree'
 
 interface TreeViewProps {
@@ -49,6 +50,7 @@ function SortableNode({
   onDelete,
   onEditingChange,
   onNavigateToSection,
+  onOpenDetail,
 }: {
   node: TreeNode
   focused: boolean
@@ -61,6 +63,7 @@ function SortableNode({
   onDelete: () => void
   onEditingChange?: (editing: boolean) => void
   onNavigateToSection?: (listId: string, sectionId: string) => void
+  onOpenDetail?: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: node.id,
@@ -86,6 +89,7 @@ function SortableNode({
         onDelete={onDelete}
         onEditingChange={onEditingChange}
         onNavigateToSection={onNavigateToSection}
+        onOpenDetail={onOpenDetail}
       />
     </div>
   )
@@ -111,6 +115,7 @@ export function TreeView({
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
+  const [detailNodeId, setDetailNodeId] = useState<string | null>(null)
 
   // Set grabbing cursor on body during drag
   useEffect(() => {
@@ -124,8 +129,8 @@ export function TreeView({
     const focusedNode = focusedId ? visibleNodes.find((n) => n.id === focusedId) : null
     if (focusedNode) {
       if (type === 'item' && focusedNode.type === 'section') {
-        // Add item as child of focused section
-        onAddNode({ type, text: '', parent_id: focusedNode.id })
+        // Add item as first child of focused section
+        onAddNode({ type, text: '', parent_id: focusedNode.id, at_beginning: true })
       } else {
         // Add as sibling after focused node (works for both items and sections)
         onAddNode({ type, text: '', parent_id: focusedNode.parent_id, after_id: focusedNode.id })
@@ -386,6 +391,7 @@ export function TreeView({
                     if (!editing) setEditingNodeId(null)
                   }}
                   onNavigateToSection={onNavigateToSection}
+                  onOpenDetail={() => setDetailNodeId(node.id)}
                 />
               ))}
               <div className="mt-3 ml-1 sm:ml-2 flex items-center gap-1 sm:gap-2">
@@ -431,6 +437,20 @@ export function TreeView({
           })() : null}
         </DragOverlay>
       </DndContext>
+
+      {/* Item detail panel */}
+      {detailNodeId && (() => {
+        const detailNode = visibleNodes.find((n) => n.id === detailNodeId)
+        if (!detailNode || detailNode.type !== 'item') return null
+        return (
+          <ItemDetailPanel
+            node={detailNode}
+            onUpdate={(data) => onUpdate(detailNodeId, data)}
+            onDelete={() => onDelete(detailNodeId)}
+            onClose={() => setDetailNodeId(null)}
+          />
+        )
+      })()}
     </div>
   )
 }

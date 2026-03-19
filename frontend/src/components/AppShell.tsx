@@ -97,7 +97,7 @@ export function AppShell() {
     const focusedNode = focusedId ? visibleNodes.find((n) => n.id === focusedId) : null
     if (focusedNode) {
       if (type === 'item' && focusedNode.type === 'section') {
-        addNode({ type, text: '', parent_id: focusedNode.id })
+        addNode({ type, text: '', parent_id: focusedNode.id, at_beginning: true })
       } else {
         addNode({ type, text: '', parent_id: focusedNode.parent_id, after_id: focusedNode.id })
       }

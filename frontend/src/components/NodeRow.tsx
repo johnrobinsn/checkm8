@@ -17,6 +17,7 @@ interface NodeRowProps {
   onDelete: () => void
   onEditingChange?: (editing: boolean) => void
   onNavigateToSection?: (listId: string, sectionId: string) => void
+  onOpenDetail?: () => void
 }
 
 export function NodeRow({
@@ -31,6 +32,7 @@ export function NodeRow({
   onDelete,
   onEditingChange,
   onNavigateToSection,
+  onOpenDetail,
 }: NodeRowProps) {
   const [editing, setEditingState] = useState(false)
   const [editText, setEditText] = useState(node.text)
@@ -180,6 +182,33 @@ export function NodeRow({
     }
   }
 
+  // Long-press to open detail panel (items only)
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const longPressTriggered = useRef(false)
+
+  const handlePointerDown = () => {
+    if (node.type !== 'item' || !onOpenDetail) return
+    longPressTriggered.current = false
+    longPressTimer.current = setTimeout(() => {
+      longPressTriggered.current = true
+      onOpenDetail()
+    }, 500)
+  }
+
+  const handlePointerUp = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+  }
+
+  const handlePointerLeave = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+  }
+
   const hasChildren = node.children.length > 0
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 640
   const indent = node.depth * (isMobile ? 16 : 24)
@@ -227,6 +256,15 @@ export function NodeRow({
         style={{ paddingLeft: `${indent + 8}px` }}
         onClick={onFocus}
         onDoubleClick={() => setEditing(true)}
+        onContextMenu={(e) => {
+          if (node.type === 'item' && onOpenDetail) {
+            e.preventDefault()
+            onOpenDetail()
+          }
+        }}
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerLeave}
         tabIndex={-1}
       >
         {/* Collapse/expand toggle */}
@@ -310,17 +348,19 @@ export function NodeRow({
           </span>
         )}
 
-        {/* Notes toggle */}
-        <button
-          className={`p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0 ${node.notes ? '!opacity-100' : ''}`}
-          onClick={(e) => { e.stopPropagation(); setShowNotes(!showNotes) }}
-          tabIndex={-1}
-          title="Notes"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h6m-3 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/>
-          </svg>
-        </button>
+        {/* Notes toggle (sections only — items use detail panel via long-press) */}
+        {node.type === 'section' && (
+          <button
+            className={`p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0 ${node.notes ? '!opacity-100' : ''}`}
+            onClick={(e) => { e.stopPropagation(); setShowNotes(!showNotes) }}
+            tabIndex={-1}
+            title="Notes"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h6m-3 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/>
+            </svg>
+          </button>
+        )}
 
         {/* Delete */}
         <button

@@ -49,6 +49,7 @@ async def create(
             notes=body.notes,
             priority=body.priority.value if body.priority else None,
             due_date=body.due_date,
+            at_beginning=body.at_beginning,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

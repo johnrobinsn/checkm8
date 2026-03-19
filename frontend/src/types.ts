@@ -47,6 +47,7 @@ export interface NodeCreate {
   text?: string
   parent_id?: string | null
   after_id?: string | null
+  at_beginning?: boolean
   checked?: boolean
   notes?: string | null
   priority?: Priority | null

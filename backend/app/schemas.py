@@ -94,6 +94,7 @@ class NodeCreate(BaseModel):
     text: str = ""
     parent_id: str | None = None
     after_id: str | None = None  # insert after this sibling; None = end
+    at_beginning: bool = False  # insert as first child (before all siblings)
     checked: bool = False
     notes: str | None = None
     priority: Priority | None = None

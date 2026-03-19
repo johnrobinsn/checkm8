@@ -3,7 +3,7 @@ import uuid
 import aiosqlite
 
 
-async def _next_position(db: aiosqlite.Connection, list_id: str, parent_id: str | None, after_id: str | None) -> float:
+async def _next_position(db: aiosqlite.Connection, list_id: str, parent_id: str | None, after_id: str | None, at_beginning: bool = False) -> float:
     """Calculate position for a new node."""
     if after_id:
         rows = await db.execute_fetchall("SELECT position FROM nodes WHERE id = ?", (after_id,))
@@ -22,6 +22,17 @@ async def _next_position(db: aiosqlite.Connection, list_id: str, parent_id: str 
         if next_rows:
             return (after_pos + next_rows[0]["position"]) / 2.0
         return after_pos + 1.0
+    elif at_beginning:
+        # Insert at beginning
+        rows = await db.execute_fetchall(
+            """
+            SELECT MIN(position) as min_pos FROM nodes
+            WHERE list_id = ? AND parent_id IS ?
+            """,
+            (list_id, parent_id),
+        )
+        min_pos = rows[0]["min_pos"] if rows and rows[0]["min_pos"] is not None else 1.0
+        return min_pos - 1.0
     else:
         # Insert at end
         rows = await db.execute_fetchall(
@@ -75,6 +86,7 @@ async def create_node(
     notes: str | None = None,
     priority: str | None = None,
     due_date: str | None = None,
+    at_beginning: bool = False,
 ) -> dict:
     # Validate depth
     if parent_id is not None:
@@ -82,7 +94,7 @@ async def create_node(
         if depth >= 5:
             raise ValueError("Maximum nesting depth (5) exceeded")
 
-    position = await _next_position(db, list_id, parent_id, after_id)
+    position = await _next_position(db, list_id, parent_id, after_id, at_beginning=at_beginning)
     node_id = str(uuid.uuid4())
 
     await db.execute(
