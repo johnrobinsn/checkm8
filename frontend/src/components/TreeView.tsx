@@ -8,6 +8,7 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragMoveEvent,
   type DragStartEvent,
 } from '@dnd-kit/core'
 import {
@@ -118,6 +119,7 @@ export function TreeView({
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
+  const [previewDepth, setPreviewDepth] = useState<number | null>(null)
   const [detailNodeId, setDetailNodeId] = useState<string | null>(null)
 
   // Set grabbing cursor on body during drag
@@ -165,6 +167,35 @@ export function TreeView({
     useSensor(TouchSensor, {
       activationConstraint: { delay: 300, tolerance: 5 },
     }),
+  )
+
+  const handleDragMove = useCallback(
+    (event: DragMoveEvent) => {
+      const activeNode = nodes.find((n) => n.id === (event.active.id as string))
+      if (!activeNode) return
+
+      const deltaX = event.delta?.x ?? 0
+      const isMobile = window.innerWidth < 640
+      const indentThreshold = isMobile ? 16 : 24
+      const currentDepth = getNodeDepth(nodes, activeNode.id)
+
+      if (deltaX < -indentThreshold && activeNode.parent_id) {
+        // Dragging left → preview outdent
+        setPreviewDepth(Math.max(0, currentDepth - 1))
+      } else if (deltaX > indentThreshold) {
+        // Dragging right → preview indent (if previous sibling exists and depth allows)
+        const siblings = visibleNodes.filter((n) => n.parent_id === activeNode.parent_id)
+        const sibIdx = siblings.findIndex((s) => s.id === activeNode.id)
+        if (sibIdx > 0 && currentDepth < 4) {
+          setPreviewDepth(currentDepth + 1)
+        } else {
+          setPreviewDepth(currentDepth)
+        }
+      } else {
+        setPreviewDepth(currentDepth)
+      }
+    },
+    [nodes, visibleNodes],
   )
 
   const handleDragEnd = useCallback(
@@ -387,8 +418,9 @@ export function TreeView({
         sensors={sensors}
         collisionDetection={closestCenter}
         onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)}
-        onDragEnd={(e: DragEndEvent) => { setActiveId(null); handleDragEnd(e) }}
-        onDragCancel={() => setActiveId(null)}
+        onDragMove={handleDragMove}
+        onDragEnd={(e: DragEndEvent) => { setActiveId(null); setPreviewDepth(null); handleDragEnd(e) }}
+        onDragCancel={() => { setActiveId(null); setPreviewDepth(null) }}
       >
         <SortableContext items={visibleNodes.map((n) => n.id)} strategy={verticalListSortingStrategy}>
           {visibleNodes.length === 0 ? (
@@ -439,10 +471,11 @@ export function TreeView({
           {activeId ? (() => {
             const node = visibleNodes.find((n) => n.id === activeId)
             if (!node) return null
+            const previewNode = previewDepth != null ? { ...node, depth: previewDepth } : node
             return (
               <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg ring-1 ring-gray-200 dark:ring-gray-700" style={{ cursor: 'grabbing' }}>
                 <NodeRow
-                  node={node}
+                  node={previewNode}
                   focused={false}
                   collapsed={collapsed.has(node.id)}
                   onToggleCollapse={() => {}}
