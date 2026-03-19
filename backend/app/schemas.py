@@ -113,6 +113,7 @@ class NodeUpdate(BaseModel):
 class NodeMove(BaseModel):
     parent_id: str | None = None  # new parent (None = root)
     after_id: str | None = None   # insert after this sibling; None = end
+    at_beginning: bool = False    # insert as first child (before all siblings)
 
 
 class NodeOut(BaseModel):

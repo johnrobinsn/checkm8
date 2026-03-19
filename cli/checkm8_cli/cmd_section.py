@@ -98,7 +98,7 @@ def move(list_ref: str, section_ref: str, up: bool, down: bool, top: bool, after
     if top:
         # Move to first position among siblings
         body["parent_id"] = node["parent_id"]
-        # No after_id = insert at beginning
+        body["at_beginning"] = True
     elif up or down:
         idx = next((i for i, s in enumerate(siblings) if s["id"] == node["id"]), -1)
         if idx < 0:
@@ -111,7 +111,9 @@ def move(list_ref: str, section_ref: str, up: bool, down: bool, top: bool, after
             # Place before the previous sibling by finding the one before that
             if idx >= 2:
                 body["after_id"] = siblings[idx - 2]["id"]
-            # else: moving to first position, no after_id needed
+            else:
+                # Moving to first position
+                body["at_beginning"] = True
             body["parent_id"] = node["parent_id"]
         else:  # down
             if idx >= len(siblings) - 1:
@@ -135,6 +137,7 @@ def move(list_ref: str, section_ref: str, up: bool, down: bool, top: bool, after
                 console.print(f"[red]Error:[/red] Section '{to_parent}' not found.")
                 raise SystemExit(1)
             body["parent_id"] = p["id"]
+        body["at_beginning"] = True
     else:
         console.print("[yellow]Specify --up, --down, --top, --after, or --to.[/yellow]")
         return

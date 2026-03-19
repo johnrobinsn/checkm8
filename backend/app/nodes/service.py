@@ -160,6 +160,7 @@ async def move_node(
     node_id: str,
     new_parent_id: str | None,
     after_id: str | None,
+    at_beginning: bool = False,
 ) -> dict:
     node = await get_node(db, node_id)
     if not node:
@@ -172,7 +173,7 @@ async def move_node(
         if new_parent_depth + subtree_depth + 1 > 5:
             raise ValueError("Move would exceed maximum nesting depth (5)")
 
-    position = await _next_position(db, node["list_id"], new_parent_id, after_id)
+    position = await _next_position(db, node["list_id"], new_parent_id, after_id, at_beginning=at_beginning)
 
     await db.execute(
         "UPDATE nodes SET parent_id = ?, position = ?, updated_at = datetime('now') WHERE id = ?",

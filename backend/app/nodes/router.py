@@ -129,7 +129,7 @@ async def move(
     if not node or node["list_id"] != list_id:
         raise HTTPException(status_code=404, detail="Node not found")
     try:
-        moved = await move_node(db, node_id, body.parent_id, body.after_id)
+        moved = await move_node(db, node_id, body.parent_id, body.after_id, at_beginning=body.at_beginning)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     out = _node_out(moved)
