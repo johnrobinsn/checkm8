@@ -174,42 +174,66 @@ export function TreeView({
 
       const activeId = active.id as string
       const overId = over.id as string
+      const activeNode = nodes.find((n) => n.id === activeId)
       const overNode = nodes.find((n) => n.id === overId)
-      if (!overNode) return
+      if (!activeNode || !overNode) return
 
       // Prevent moving a node to be its own parent or under its own descendants
       if (overNode.parent_id === activeId || overId === activeId) return
 
-      // Determine if dropping above or below the midpoint of the target
+      // Check horizontal drag for indent/outdent
+      const deltaX = event.delta?.x ?? 0
+      const isMobile = window.innerWidth < 640
+      const indentThreshold = isMobile ? 16 : 24
+
+      if (Math.abs(deltaX) > indentThreshold) {
+        if (deltaX < 0 && activeNode.parent_id) {
+          // Drag left → outdent: move to grandparent, placed after current parent
+          const parent = nodes.find((n) => n.id === activeNode.parent_id)
+          if (parent) {
+            onMoveNode(activeId, parent.parent_id, parent.id)
+            return
+          }
+        } else if (deltaX > 0) {
+          // Drag right → indent: make previous sibling the parent
+          const siblings = visibleNodes.filter((n) => n.parent_id === activeNode.parent_id)
+          const sibIdx = siblings.findIndex((s) => s.id === activeId)
+          if (sibIdx > 0) {
+            const prevSibling = siblings[sibIdx - 1]
+            const depth = getNodeDepth(nodes, prevSibling.id)
+            if (depth < 4) {
+              onMoveNode(activeId, prevSibling.id, null)
+              return
+            }
+          }
+        }
+      }
+
+      // Vertical reorder: determine if dropping above or below the midpoint
       let dropAbove = false
       const overEl = containerRef.current?.querySelector(`[data-node-id="${overId}"]`)
       if (overEl && activatorEvent instanceof PointerEvent) {
         const rect = overEl.getBoundingClientRect()
-        // Use the last known pointer position from the delta
         const pointerY = (activatorEvent as PointerEvent).clientY + (event.delta?.y ?? 0)
         const midY = rect.top + rect.height / 2
         dropAbove = pointerY < midY
       }
 
       if (dropAbove) {
-        // Place before the over node: find the previous sibling at the same level
         const siblings = nodes
           .filter((n) => n.parent_id === overNode.parent_id)
           .sort((a, b) => a.position - b.position)
         const overSibIdx = siblings.findIndex((s) => s.id === overId)
         if (overSibIdx <= 0) {
-          // First sibling — place at the very beginning
           onMoveNode(activeId, overNode.parent_id, null)
         } else {
-          // Place after the previous sibling
           onMoveNode(activeId, overNode.parent_id, siblings[overSibIdx - 1].id)
         }
       } else {
-        // Place after the over node
         onMoveNode(activeId, overNode.parent_id, overId)
       }
     },
-    [nodes, onMoveNode],
+    [nodes, visibleNodes, onMoveNode],
   )
 
   const handleKeyDown = useCallback(
