@@ -184,12 +184,15 @@ export function NodeRow({
     }
   }
 
-  // Context menu state
+  // Context menu state — desktop right-click only, not mobile long-press
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
+  const lastPointerType = useRef<string>('mouse')
 
   const handleContextMenu = (e: ReactMouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
+    // Don't show context menu on touch — long-press is for drag
+    if (lastPointerType.current === 'touch') return
     setCtxMenu({ x: e.clientX, y: e.clientY })
   }
 
@@ -293,9 +296,10 @@ export function NodeRow({
           ${focused ? 'bg-blue-50 dark:bg-blue-900/30 ring-2 ring-blue-400 dark:ring-blue-500 z-10' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}
           ${node.type === 'item' && node.checked ? 'opacity-60' : ''}
           ${node.type === 'section' && node.depth > 0 ? 'border-l-2 border-gray-300 dark:border-gray-600' : ''}`}
-        style={{ paddingLeft: `${indent + 8}px` }}
+        style={{ paddingLeft: `${indent + 8}px`, WebkitTouchCallout: 'none' }}
         onClick={onFocus}
         onDoubleClick={() => setEditing(true)}
+        onPointerDown={(e) => { lastPointerType.current = e.pointerType }}
         onContextMenu={handleContextMenu}
         tabIndex={-1}
       >
