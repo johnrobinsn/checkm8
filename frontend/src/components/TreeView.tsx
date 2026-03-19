@@ -78,7 +78,6 @@ function SortableNode({
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.3 : 1,
-    touchAction: 'none',
   }
 
   // When dragging, show the placeholder at the preview depth
@@ -166,9 +165,11 @@ export function TreeView({
     }
   }, [visibleNodes.length, isEditing])
 
+  const isTouchDevice = typeof window !== 'undefined' && 'ontouchstart' in window
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: { distance: 8 },
+      // On touch devices, disable PointerSensor so it doesn't steal from TouchSensor
+      activationConstraint: isTouchDevice ? { distance: Infinity } : { distance: 8 },
     }),
     useSensor(TouchSensor, {
       activationConstraint: { delay: 600, tolerance: 30 },
