@@ -4,7 +4,6 @@ import {
   DragOverlay,
   closestCenter,
   PointerSensor,
-  TouchSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -21,6 +20,7 @@ import type { TreeNode, NodeOut } from '../types'
 import { NodeRow } from './NodeRow'
 import { ItemDetailPanel } from './ItemDetailPanel'
 import { getNodeDepth } from '../lib/tree'
+import { LongPressTouchSensor, sensorPhase } from '../sensors/LongPressTouchSensor'
 
 interface TreeViewProps {
   visibleNodes: TreeNode[]
@@ -74,17 +74,26 @@ function SortableNode({
     id: node.id,
   })
 
+  // Debug: log listener keys once per node
+  useEffect(() => {
+    const el = document.getElementById('sensor-debug')
+    if (el && focused) {
+      el.textContent = `listeners: ${listeners ? Object.keys(listeners).join(', ') : 'null'}`
+    }
+  }, [listeners, focused])
+
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.3 : 1,
+    touchAction: 'none',
   }
 
   // When dragging, show the placeholder at the preview depth
   const displayNode = isDragging && previewDepth != null ? { ...node, depth: previewDepth } : node
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+    <div ref={setNodeRef} style={style} data-sortable {...attributes} {...listeners}>
       <NodeRow
         node={displayNode}
         focused={focused}
@@ -125,7 +134,50 @@ export function TreeView({
   const [isEditing, setIsEditing] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [previewDepth, setPreviewDepth] = useState<number | null>(null)
+  const previewDepthRef = useRef<number | null>(null)
   const [detailNodeId, setDetailNodeId] = useState<string | null>(null)
+
+  // Manual touch scroll refs (needed because touch-action: none disables browser scroll)
+  const dragActiveRef = useRef(false)
+  const scrollContainerRef = useRef<HTMLElement | null>(null)
+  const touchRef = useRef<{ y: number; onSortable: boolean } | null>(null)
+
+  // Find the scrollable parent on mount
+  useEffect(() => {
+    let el = containerRef.current?.parentElement ?? null
+    while (el) {
+      const { overflowY } = getComputedStyle(el)
+      if (overflowY === 'auto' || overflowY === 'scroll') {
+        scrollContainerRef.current = el
+        break
+      }
+      el = el.parentElement
+    }
+  }, [])
+
+  // Manual touch scroll — runs only when sensor cancelled (scroll gesture detected)
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    // Only scroll when sensor is idle (cancelled due to movement)
+    if (sensorPhase !== 'idle' || !scrollContainerRef.current) return
+    if (!touchRef.current) return
+    const currentY = e.touches[0].clientY
+    const deltaY = touchRef.current.y - currentY
+    scrollContainerRef.current.scrollTop += deltaY
+    touchRef.current.y = currentY
+  }, [])
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const target = e.target as HTMLElement
+    const sortable = target.closest('[data-sortable]')
+    const el = document.getElementById('sensor-debug')
+    if (el) el.textContent += ` | container phase=${sensorPhase}`
+    if (!sortable) return
+    touchRef.current = { y: e.touches[0].clientY, onSortable: true }
+  }, [])
+
+  const handleTouchEnd = useCallback(() => {
+    touchRef.current = null
+  }, [])
 
   // Set grabbing cursor on body during drag
   useEffect(() => {
@@ -166,15 +218,23 @@ export function TreeView({
   }, [visibleNodes.length, isEditing])
 
   const isTouchDevice = typeof window !== 'undefined' && 'ontouchstart' in window
+  const pointerSensor = useSensor(PointerSensor, {
+    activationConstraint: { distance: 8 },
+  })
+  const touchSensor = useSensor(LongPressTouchSensor, {
+    delay: 600,
+    tolerance: 15,
+  })
+  // On touch devices, DON'T include PointerSensor — pointerdown fires before
+  // touchstart and steals the activation lock, preventing our touch sensor.
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      // On touch devices, disable PointerSensor so it doesn't steal from TouchSensor
-      activationConstraint: isTouchDevice ? { distance: Infinity } : { distance: 8 },
-    }),
-    useSensor(TouchSensor, {
-      activationConstraint: { delay: 600, tolerance: 30 },
-    }),
+    ...(isTouchDevice ? [touchSensor] : [pointerSensor, touchSensor]),
   )
+
+  const updatePreviewDepth = useCallback((depth: number) => {
+    setPreviewDepth(depth)
+    previewDepthRef.current = depth
+  }, [])
 
   const handleDragMove = useCallback(
     (event: DragMoveEvent) => {
@@ -187,22 +247,20 @@ export function TreeView({
       const currentDepth = getNodeDepth(nodes, activeNode.id)
 
       if (deltaX < -indentThreshold && activeNode.parent_id) {
-        // Dragging left → preview outdent
-        setPreviewDepth(Math.max(0, currentDepth - 1))
+        updatePreviewDepth(Math.max(0, currentDepth - 1))
       } else if (deltaX > indentThreshold) {
-        // Dragging right → preview indent (if previous sibling exists and depth allows)
         const siblings = visibleNodes.filter((n) => n.parent_id === activeNode.parent_id)
         const sibIdx = siblings.findIndex((s) => s.id === activeNode.id)
         if (sibIdx > 0 && currentDepth < 4) {
-          setPreviewDepth(currentDepth + 1)
+          updatePreviewDepth(currentDepth + 1)
         } else {
-          setPreviewDepth(currentDepth)
+          updatePreviewDepth(currentDepth)
         }
       } else {
-        setPreviewDepth(currentDepth)
+        updatePreviewDepth(currentDepth)
       }
     },
-    [nodes, visibleNodes],
+    [nodes, visibleNodes, updatePreviewDepth],
   )
 
   const handleDragEnd = useCallback(
@@ -212,75 +270,118 @@ export function TreeView({
       const activeNode = nodes.find((n) => n.id === activeId)
       if (!activeNode) return
 
-      // Check horizontal drag for indent/outdent (works even when dropped on self)
       const deltaX = event.delta?.x ?? 0
       const isMobile = window.innerWidth < 640
       const indentThreshold = isMobile ? 16 : 24
+      const desiredDepth = previewDepthRef.current ?? getNodeDepth(nodes, activeId)
 
-      if (Math.abs(deltaX) > indentThreshold) {
-        if (deltaX < 0 && activeNode.parent_id) {
-          // Drag left → outdent: move to grandparent, placed after current parent
-          const parent = nodes.find((n) => n.id === activeNode.parent_id)
-          if (parent) {
-            onMoveNode(activeId, parent.parent_id, parent.id)
-            return
-          }
-        } else if (deltaX > 0) {
-          // Drag right → indent: make previous sibling the parent
-          const siblings = visibleNodes.filter((n) => n.parent_id === activeNode.parent_id)
-          const sibIdx = siblings.findIndex((s) => s.id === activeId)
-          if (sibIdx > 0) {
-            const prevSibling = siblings[sibIdx - 1]
-            const depth = getNodeDepth(nodes, prevSibling.id)
-            if (depth < 4) {
-              onMoveNode(activeId, prevSibling.id, null)
+      const dbg = document.getElementById('sensor-debug')
+
+      // Indent/outdent: horizontal drag dropped on self
+      if (!over || active.id === over.id) {
+        if (dbg) dbg.textContent = `drop: over=${over?.id ?? 'null'} self=${active.id} deltaX=${deltaX.toFixed(0)}`
+        if (Math.abs(deltaX) > indentThreshold) {
+          if (deltaX < 0 && activeNode.parent_id) {
+            const parent = nodes.find((n) => n.id === activeNode.parent_id)
+            if (parent) {
+              onMoveNode(activeId, parent.parent_id, parent.id)
               return
+            }
+          } else if (deltaX > 0) {
+            const siblings = visibleNodes.filter((n) => n.parent_id === activeNode.parent_id)
+            const sibIdx = siblings.findIndex((s) => s.id === activeId)
+            if (sibIdx > 0) {
+              const prevSibling = siblings[sibIdx - 1]
+              if (getNodeDepth(nodes, prevSibling.id) < 4) {
+                onMoveNode(activeId, prevSibling.id, null)
+                return
+              }
             }
           }
         }
+        return
       }
 
-      // Vertical reorder — requires dropping on a different node
-      if (!over || active.id === over.id) return
-      let targetId = over.id as string
-      let targetNode = nodes.find((n) => n.id === targetId)
-      if (!targetNode) return
-      if (targetNode.parent_id === activeId) return
+      // Vertical reorder — dropped on a different node
+      const overNode = nodes.find((n) => n.id === (over.id as string))
+      if (!overNode) { if (dbg) dbg.textContent = 'drop: overNode not found'; return }
+      if (overNode.parent_id === activeId) { if (dbg) dbg.textContent = 'drop: over is child of active'; return }
 
-      // If no significant horizontal drag and the over node is deeper than the
-      // active node, walk up to an ancestor at the same depth so the item stays
-      // at its current level instead of getting nested.
-      const activeDepth = getNodeDepth(nodes, activeId)
-      let targetDepth = getNodeDepth(nodes, targetId)
-      while (targetDepth > activeDepth && targetNode.parent_id) {
-        const parent = nodes.find((n) => n.id === targetNode!.parent_id)
+      const overDepth = getNodeDepth(nodes, over.id as string)
+      if (dbg) dbg.textContent = `drop: over=${(over.id as string).slice(0,8)} oD=${overDepth} dD=${desiredDepth} refD=${desiredDepth}`
+
+      // Use desiredDepth (from preview) to determine the correct parent.
+      // Walk up from over node to find the reference node at the right level.
+      let refNode = overNode
+      let refDepth = overDepth
+      while (refDepth > desiredDepth && refNode.parent_id) {
+        const parent = nodes.find((n) => n.id === refNode.parent_id)
         if (!parent) break
-        targetNode = parent
-        targetId = parent.id
-        targetDepth--
+        refNode = parent
+        refDepth--
       }
 
+      // Determine drop above/below the reference node
       let dropAbove = false
-      const overEl = containerRef.current?.querySelector(`[data-node-id="${targetId}"]`)
-      if (overEl && activatorEvent instanceof PointerEvent) {
+      const overEl = containerRef.current?.querySelector(`[data-node-id="${over.id}"]`)
+      if (overEl) {
         const rect = overEl.getBoundingClientRect()
-        const pointerY = (activatorEvent as PointerEvent).clientY + (event.delta?.y ?? 0)
-        const midY = rect.top + rect.height / 2
-        dropAbove = pointerY < midY
+        let startY: number | null = null
+        if (activatorEvent instanceof PointerEvent) {
+          startY = activatorEvent.clientY
+        } else if (activatorEvent instanceof TouchEvent && activatorEvent.touches.length > 0) {
+          startY = activatorEvent.touches[0].clientY
+        }
+        if (startY !== null) {
+          const pointerY = startY + (event.delta?.y ?? 0)
+          const midY = rect.top + rect.height / 2
+          dropAbove = pointerY < midY
+        }
       }
 
-      if (dropAbove) {
-        const siblings = nodes
-          .filter((n) => n.parent_id === targetNode.parent_id)
-          .sort((a, b) => a.position - b.position)
-        const targetSibIdx = siblings.findIndex((s) => s.id === targetId)
-        if (targetSibIdx <= 0) {
-          onMoveNode(activeId, targetNode.parent_id, null, true)
+      if (desiredDepth === refDepth + 1) {
+        if (dropAbove) {
+          // Finger is ABOVE the section header → item belongs at end of PREVIOUS section
+          const sectionSiblings = nodes
+            .filter((n) => n.parent_id === refNode.parent_id && n.id !== activeId)
+            .sort((a, b) => a.position - b.position)
+          const refIdx = sectionSiblings.findIndex((s) => s.id === refNode.id)
+          if (refIdx > 0) {
+            const prevSection = sectionSiblings[refIdx - 1]
+            const prevChildren = nodes
+              .filter((n) => n.parent_id === prevSection.id && n.id !== activeId)
+              .sort((a, b) => a.position - b.position)
+            if (dbg) dbg.textContent = `MOVE into prev "${prevSection.text}" | over="${overNode.text}" oD=${overDepth} dD=${desiredDepth}`
+            onMoveNode(activeId, prevSection.id, prevChildren.length > 0 ? prevChildren[prevChildren.length - 1].id : null, prevChildren.length === 0)
+          } else {
+            // No previous section — place at beginning of this section
+            if (dbg) dbg.textContent = `MOVE into "${refNode.text}" atBegin (no prev) | over="${overNode.text}" oD=${overDepth} dD=${desiredDepth}`
+            onMoveNode(activeId, refNode.id, null, true)
+          }
         } else {
-          onMoveNode(activeId, targetNode.parent_id, siblings[targetSibIdx - 1].id)
+          // Finger is BELOW the section header → item goes into THIS section
+          if (dbg) dbg.textContent = `MOVE into "${refNode.text}" atBegin | over="${overNode.text}" oD=${overDepth} dD=${desiredDepth}`
+          onMoveNode(activeId, refNode.id, null, true)
         }
       } else {
-        onMoveNode(activeId, targetNode.parent_id, targetId)
+        // Same level as refNode — place before or after
+        const parentId = refNode.parent_id
+        const parentNode = parentId ? nodes.find((n) => n.id === parentId) : null
+        if (dropAbove) {
+          const siblings = nodes
+            .filter((n) => n.parent_id === parentId && n.id !== activeId)
+            .sort((a, b) => a.position - b.position)
+          const refIdx = siblings.findIndex((s) => s.id === refNode.id)
+          if (refIdx <= 0) {
+            if (dbg) dbg.textContent = `MOVE sibling parent="${parentNode?.text ?? 'root'}" atBegin | over="${overNode.text}" oD=${overDepth} dD=${desiredDepth}`
+            onMoveNode(activeId, parentId, null, true)
+          } else {
+            if (dbg) dbg.textContent = `MOVE sibling parent="${parentNode?.text ?? 'root'}" after="${siblings[refIdx - 1].text}" | over="${overNode.text}" oD=${overDepth} dD=${desiredDepth}`
+            onMoveNode(activeId, parentId, siblings[refIdx - 1].id)
+          }
+        } else {
+          onMoveNode(activeId, parentId, refNode.id)
+        }
       }
     },
     [nodes, visibleNodes, onMoveNode],
@@ -433,14 +534,21 @@ export function TreeView({
       className="flex-1 outline-none"
       tabIndex={0}
       onKeyDown={handleKeyDown}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
     >
+      {/* Debug overlay — remove after fixing touch drag */}
+      <div id="sensor-debug" className="fixed top-0 left-0 right-0 z-[9999] bg-black/80 text-green-400 text-xs font-mono px-2 py-1 pointer-events-none hidden">
+        sensor: idle
+      </div>
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
-        onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)}
+        onDragStart={(e: DragStartEvent) => { dragActiveRef.current = true; setActiveId(e.active.id as string) }}
         onDragMove={handleDragMove}
-        onDragEnd={(e: DragEndEvent) => { setActiveId(null); setPreviewDepth(null); handleDragEnd(e) }}
-        onDragCancel={() => { setActiveId(null); setPreviewDepth(null) }}
+        onDragEnd={(e: DragEndEvent) => { handleDragEnd(e); dragActiveRef.current = false; setActiveId(null); setPreviewDepth(null); previewDepthRef.current = null }}
+        onDragCancel={() => { dragActiveRef.current = false; setActiveId(null); setPreviewDepth(null); previewDepthRef.current = null }}
       >
         <SortableContext items={visibleNodes.map((n) => n.id)} strategy={verticalListSortingStrategy}>
           {visibleNodes.length === 0 ? (

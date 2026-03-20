@@ -54,7 +54,7 @@ async def create(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     out = _node_out(node)
-    await manager.broadcast(list_id, {"type": "node_created", "node": out.model_dump()}, exclude_user=user["id"])
+    await manager.broadcast(list_id, {"type": "node_created", "node": out.model_dump()}, exclude_user=None)
     return out
 
 
@@ -73,7 +73,7 @@ async def import_batch(
         raise HTTPException(status_code=400, detail=str(e))
     results = [_node_out(n) for n in created]
     for out in results:
-        await manager.broadcast(list_id, {"type": "node_created", "node": out.model_dump()}, exclude_user=user["id"])
+        await manager.broadcast(list_id, {"type": "node_created", "node": out.model_dump()}, exclude_user=None)
     return results
 
 
@@ -111,7 +111,7 @@ async def update(
         updates["priority"] = updates["priority"].value
     updated = await update_node(db, node_id, updates)
     out = _node_out(updated)
-    await manager.broadcast(list_id, {"type": "node_updated", "node": out.model_dump()}, exclude_user=user["id"])
+    await manager.broadcast(list_id, {"type": "node_updated", "node": out.model_dump()}, exclude_user=None)
     return out
 
 
@@ -133,7 +133,7 @@ async def move(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     out = _node_out(moved)
-    await manager.broadcast(list_id, {"type": "node_moved", "node": out.model_dump()}, exclude_user=user["id"])
+    await manager.broadcast(list_id, {"type": "node_moved", "node": out.model_dump()}, exclude_user=None)
     return out
 
 
@@ -150,4 +150,4 @@ async def delete(
     if not node or node["list_id"] != list_id:
         raise HTTPException(status_code=404, detail="Node not found")
     await delete_node(db, node_id)
-    await manager.broadcast(list_id, {"type": "node_deleted", "node_id": node_id}, exclude_user=user["id"])
+    await manager.broadcast(list_id, {"type": "node_deleted", "node_id": node_id}, exclude_user=None)

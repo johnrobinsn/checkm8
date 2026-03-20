@@ -289,8 +289,15 @@ export function NodeRow({
     )
   }
 
+  const rowRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (focused && rowRef.current) {
+      rowRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    }
+  }, [focused])
+
   return (
-    <div data-node-id={node.id}>
+    <div data-node-id={node.id} ref={rowRef}>
       <div
         className={`flex items-center gap-2 ${node.type === 'section' ? 'py-2 mt-3 first:mt-0' : 'py-1'} px-2 rounded group cursor-default select-none relative
           ${focused ? 'bg-blue-50 dark:bg-blue-900/30 ring-2 ring-blue-400 dark:ring-blue-500 z-10' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}

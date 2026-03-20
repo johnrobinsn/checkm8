@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { NodeCreate, NodeOut, NodeUpdate, PresenceUser, WsMessage } from '../types'
 import { buildTree, getVisibleNodes } from '../lib/tree'
 import * as nodesApi from '../api/nodes'
@@ -132,6 +132,31 @@ export function useTree(listId: string | null) {
   const moveNodeAction = useCallback(async (nodeId: string, parentId: string | null, afterId: string | null, atBeginning?: boolean) => {
     if (!listId) return
     const oldNode = uniqueNodes.find((n) => n.id === nodeId)
+
+    // Optimistic local reorder: update parent_id and position immediately
+    setNodes((prev) => {
+      const siblings = prev
+        .filter((n) => n.parent_id === parentId && n.id !== nodeId)
+        .sort((a, b) => a.position - b.position)
+      let newPos: number
+      if (atBeginning || (!afterId && siblings.length === 0)) {
+        newPos = siblings.length > 0 ? siblings[0].position - 1 : 0
+      } else if (afterId) {
+        const afterIdx = siblings.findIndex((s) => s.id === afterId)
+        if (afterIdx >= 0) {
+          const afterPos = siblings[afterIdx].position
+          const nextPos = afterIdx + 1 < siblings.length ? siblings[afterIdx + 1].position : afterPos + 2
+          newPos = (afterPos + nextPos) / 2
+        } else {
+          newPos = siblings.length > 0 ? siblings[siblings.length - 1].position + 1 : 0
+        }
+      } else {
+        newPos = siblings.length > 0 ? siblings[siblings.length - 1].position + 1 : 0
+      }
+      return prev.map((n) => n.id === nodeId ? { ...n, parent_id: parentId, position: newPos } : n)
+    })
+
+    // Confirm with server
     const moved = await nodesApi.moveNode(listId, nodeId, { parent_id: parentId, after_id: afterId, at_beginning: atBeginning })
     setNodes((prev) => prev.map((n) => (n.id === nodeId ? moved : n)))
 
