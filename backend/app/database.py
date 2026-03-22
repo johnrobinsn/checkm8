@@ -63,10 +63,22 @@ CREATE TABLE IF NOT EXISTS device_codes (
     expires_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS attachments (
+    id TEXT PRIMARY KEY,
+    node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+    list_id TEXT NOT NULL REFERENCES lists(id),
+    filename TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    storage_path TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_nodes_list ON nodes(list_id);
 CREATE INDEX IF NOT EXISTS idx_nodes_parent ON nodes(parent_id);
 CREATE INDEX IF NOT EXISTS idx_list_shares_token ON list_shares(share_token);
 CREATE INDEX IF NOT EXISTS idx_list_shares_user ON list_shares(user_id);
+CREATE INDEX IF NOT EXISTS idx_attachments_node ON attachments(node_id);
 """
 
 

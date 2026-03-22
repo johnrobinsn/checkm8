@@ -29,6 +29,7 @@ from app.lists.router import router as lists_router
 from app.nodes.router import router as nodes_router
 from app.sharing.router import router as sharing_router
 from app.sections_router import router as sections_router
+from app.attachments.router import router as attachments_router
 from app.ws.router import router as ws_router
 
 app.include_router(auth_router)
@@ -36,6 +37,7 @@ app.include_router(lists_router)
 app.include_router(nodes_router)
 app.include_router(sharing_router)
 app.include_router(sections_router)
+app.include_router(attachments_router)
 app.include_router(ws_router)
 
 

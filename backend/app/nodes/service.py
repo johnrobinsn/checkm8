@@ -309,10 +309,14 @@ async def resolve_section(
 
 
 async def delete_node(db: aiosqlite.Connection, node_id: str):
-    """Delete a node and all its descendants."""
+    """Delete a node and all its descendants, including attachment files."""
+    from app.attachments.service import delete_node_attachments
+
     # Recursively delete children first
     children = await db.execute_fetchall("SELECT id FROM nodes WHERE parent_id = ?", (node_id,))
     for child in children:
         await delete_node(db, child["id"])
+    # Clean up attachment files from disk (DB rows cascade-deleted)
+    await delete_node_attachments(node_id)
     await db.execute("DELETE FROM nodes WHERE id = ?", (node_id,))
     await db.commit()

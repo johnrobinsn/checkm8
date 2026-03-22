@@ -152,6 +152,19 @@ class ShareClaimOut(BaseModel):
     permission: Permission
 
 
+# --- Attachments ---
+
+class AttachmentOut(BaseModel):
+    id: str
+    node_id: str
+    list_id: str
+    filename: str
+    mime_type: str
+    size: int
+    created_at: str
+    url: str
+
+
 # --- Import ---
 
 class SectionSearchResult(BaseModel):

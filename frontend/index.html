@@ -12,6 +12,29 @@
     <meta name="apple-mobile-web-app-title" content="checkm8" />
     <link rel="manifest" href="/manifest.json" />
     <title>checkm8</title>
+    <script>
+      // Apply dark mode class immediately to prevent white flash
+      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.classList.add('dark');
+      }
+    </script>
+    <style>
+      /* Inline critical styles to prevent flash */
+      html.dark body { background-color: #030712; }
+      html:not(.dark) body { background-color: #ffffff; }
+      #root:empty::after {
+        content: '';
+        display: block;
+        width: 24px;
+        height: 24px;
+        margin: 40vh auto;
+        border: 3px solid rgba(128,128,128,0.2);
+        border-top-color: rgba(128,128,128,0.6);
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
   </head>
   <body>
     <div id="root"></div>

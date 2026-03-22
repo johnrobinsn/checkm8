@@ -90,6 +90,17 @@ export interface SectionResolveResult {
   list_id: string
 }
 
+export interface Attachment {
+  id: string
+  node_id: string
+  list_id: string
+  filename: string
+  mime_type: string
+  size: number
+  created_at: string
+  url: string
+}
+
 export interface TreeNode extends NodeOut {
   children: TreeNode[]
   depth: number

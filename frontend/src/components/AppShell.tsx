@@ -168,7 +168,7 @@ export function AppShell() {
       addSectionWithPrompt()
       return
     }
-    const focusedNode = focusedId ? visibleNodes.find((n) => n.id === focusedId) : null
+    const focusedNode = focusedId ? nodes.find((n) => n.id === focusedId) : null
     if (focusedNode) {
       if (focusedNode.type === 'section') {
         addNode({ type, text: '', parent_id: focusedNode.id, at_beginning: true })
@@ -178,7 +178,7 @@ export function AppShell() {
     } else {
       addNode({ type, text: '' })
     }
-  }, [focusedId, visibleNodes, addNode, addSectionWithPrompt])
+  }, [focusedId, nodes, addNode, addSectionWithPrompt])
 
   return (
     <div className="flex overflow-hidden bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100" style={{ height: 'var(--viewport-height, 100dvh)' }}>

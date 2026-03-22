@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useMomentumScroll } from '../hooks/useMomentumScroll'
 import {
   DndContext,
   DragOverlay,
@@ -137,10 +138,9 @@ export function TreeView({
   const previewDepthRef = useRef<number | null>(null)
   const [detailNodeId, setDetailNodeId] = useState<string | null>(null)
 
-  // Manual touch scroll refs (needed because touch-action: none disables browser scroll)
+  // Touch scroll with momentum (needed because touch-action: none disables browser scroll)
   const dragActiveRef = useRef(false)
   const scrollContainerRef = useRef<HTMLElement | null>(null)
-  const touchRef = useRef<{ y: number; onSortable: boolean } | null>(null)
 
   // Find the scrollable parent on mount
   useEffect(() => {
@@ -155,29 +155,10 @@ export function TreeView({
     }
   }, [])
 
-  // Manual touch scroll — runs only when sensor cancelled (scroll gesture detected)
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    // Only scroll when sensor is idle (cancelled due to movement)
-    if (sensorPhase !== 'idle' || !scrollContainerRef.current) return
-    if (!touchRef.current) return
-    const currentY = e.touches[0].clientY
-    const deltaY = touchRef.current.y - currentY
-    scrollContainerRef.current.scrollTop += deltaY
-    touchRef.current.y = currentY
-  }, [])
-
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    const target = e.target as HTMLElement
-    const sortable = target.closest('[data-sortable]')
-    const el = document.getElementById('sensor-debug')
-    if (el) el.textContent += ` | container phase=${sensorPhase}`
-    if (!sortable) return
-    touchRef.current = { y: e.touches[0].clientY, onSortable: true }
-  }, [])
-
-  const handleTouchEnd = useCallback(() => {
-    touchRef.current = null
-  }, [])
+  const { handleTouchStart, handleTouchMove, handleTouchEnd, cancelMomentum } = useMomentumScroll({
+    scrollContainerRef,
+    isScrollDisabled: () => sensorPhase !== 'idle',
+  })
 
   // Set grabbing cursor on body during drag
   useEffect(() => {
@@ -545,7 +526,7 @@ export function TreeView({
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
-        onDragStart={(e: DragStartEvent) => { dragActiveRef.current = true; setActiveId(e.active.id as string) }}
+        onDragStart={(e: DragStartEvent) => { cancelMomentum(); dragActiveRef.current = true; setActiveId(e.active.id as string) }}
         onDragMove={handleDragMove}
         onDragEnd={(e: DragEndEvent) => { handleDragEnd(e); dragActiveRef.current = false; setActiveId(null); setPreviewDepth(null); previewDepthRef.current = null }}
         onDragCancel={() => { dragActiveRef.current = false; setActiveId(null); setPreviewDepth(null); previewDepthRef.current = null }}
