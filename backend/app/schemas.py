@@ -87,6 +87,21 @@ class ListSearchOut(ListOut):
     matching_nodes: list[MatchingNode] = []
 
 
+class ListSettings(BaseModel):
+    auto_archive_enabled: bool = False
+    auto_archive_minutes: int = 60
+
+
+class ListSettingsUpdate(BaseModel):
+    auto_archive_enabled: bool | None = None
+    auto_archive_minutes: int | None = None
+
+
+class AutocompleteSuggestion(BaseModel):
+    text: str
+    frequency: int
+
+
 # --- Nodes ---
 
 class NodeCreate(BaseModel):
@@ -123,11 +138,13 @@ class NodeOut(BaseModel):
     type: NodeType
     text: str
     checked: bool
+    checked_at: str | None = None
     notes: str | None = None
     priority: Priority | None = None
     due_date: str | None = None
     position: float
     pinned: bool = False
+    archived: bool = False
     created_at: str
     updated_at: str
 

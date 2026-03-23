@@ -59,6 +59,9 @@ export function useTree(listId: string | null) {
           return prev.filter((n) => !toRemove.has(n.id))
         })
         break
+      case 'nodes_archived':
+        setNodes((prev) => prev.filter((n) => !msg.node_ids.includes(n.id)))
+        break
       case 'presence':
         setPresenceUsers(msg.users)
         break

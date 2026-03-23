@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
-import type { TreeNode, NodeUpdate, NodeCreate, SectionSearchResult } from '../types'
+import { useState, useRef, useEffect, useCallback, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
+import type { TreeNode, NodeUpdate, NodeCreate, SectionSearchResult, AutocompleteSuggestion } from '../types'
 import { getDueDateColor, getPriorityColor } from '../lib/tree'
 import { parseLinks, hasLinks } from '../lib/parseLinks'
 import { resolveSection } from '../api/nodes'
+import { getAutocomplete } from '../api/lists'
 import { SectionAutocomplete } from './SectionAutocomplete'
 
 interface NodeRowProps {
@@ -52,22 +53,40 @@ export function NodeRow({
       setEditing(true)
     }
   }, [startEditingProp, focused])
+
+  // When focus leaves this row, commit any pending edit and close panels
+  useEffect(() => {
+    if (!focused) {
+      if (editing) commitEdit()
+      setDeleteConfirm(false)
+    }
+  }, [focused])
   const [showNotes, setShowNotes] = useState(false)
   const [editingNotes, setEditingNotes] = useState(false)
   const [notesText, setNotesText] = useState(node.notes || '')
   const inputRef = useRef<HTMLInputElement>(null)
   const notesRef = useRef<HTMLTextAreaElement>(null)
 
-  // Autocomplete state
+  // Section autocomplete state (triggered by [[)
   const [acQuery, setAcQuery] = useState('')
   const [acActive, setAcActive] = useState(false)
   const [acAnchor, setAcAnchor] = useState<{ top: number; left: number; height: number } | null>(null)
   const acStartPos = useRef<number>(-1)
 
+  // Archive autocomplete state (triggered by typing)
+  const [archiveAc, setArchiveAc] = useState<AutocompleteSuggestion[]>([])
+  const [archiveAcVisible, setArchiveAcVisible] = useState(false)
+  const archiveAcTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [archiveAcIndex, setArchiveAcIndex] = useState(-1)
+
   useEffect(() => {
     if (editing && inputRef.current) {
       inputRef.current.focus()
       inputRef.current.select()
+      // Fetch archive suggestions immediately (shows top items when text is empty)
+      if (node.type === 'item') {
+        fetchArchiveAc(editText)
+      }
     }
   }, [editing])
 
@@ -81,9 +100,12 @@ export function NodeRow({
     if (!editing) {
       setEditText(node.text)
       setAcActive(false)
+      setArchiveAcVisible(false)
+      setArchiveAc([])
+      if (archiveAcTimer.current) clearTimeout(archiveAcTimer.current)
     }
     setNotesText(node.notes || '')
-  }, [node.text, node.notes])
+  }, [node.text, node.notes, editing])
 
   const commitEdit = () => {
     if (committedRef.current) return
@@ -91,6 +113,7 @@ export function NodeRow({
     const textToSave = editText
     setEditing(false)
     setAcActive(false)
+    setArchiveAcVisible(false)
     if (textToSave !== node.text) {
       onUpdate({ text: textToSave })
     }
@@ -103,8 +126,56 @@ export function NodeRow({
     }
   }
 
+  // Fetch archive autocomplete suggestions (empty string returns top 3 by frequency)
+  const fetchArchiveAc = useCallback((text: string) => {
+    if (archiveAcTimer.current) clearTimeout(archiveAcTimer.current)
+    if (!currentListId) {
+      setArchiveAc([])
+      setArchiveAcVisible(false)
+      return
+    }
+    const delay = text.trim() ? 200 : 0
+    archiveAcTimer.current = setTimeout(async () => {
+      const results = await getAutocomplete(currentListId, text.trim())
+      setArchiveAc(results)
+      setArchiveAcVisible(results.length > 0)
+      setArchiveAcIndex(-1)
+    }, delay)
+  }, [currentListId])
+
+  const selectArchiveAc = (text: string) => {
+    setEditText(text)
+    setArchiveAcVisible(false)
+    setArchiveAc([])
+    inputRef.current?.focus()
+  }
+
   const handleKeyDown = (e: KeyboardEvent) => {
-    // Let autocomplete handle these keys when active
+    // Archive autocomplete keyboard navigation
+    if (archiveAcVisible && archiveAc.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setArchiveAcIndex((prev) => Math.min(prev + 1, archiveAc.length - 1))
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setArchiveAcIndex((prev) => Math.max(prev - 1, -1))
+        return
+      }
+      if (e.key === 'Enter' && archiveAcIndex >= 0) {
+        e.preventDefault()
+        selectArchiveAc(archiveAc[archiveAcIndex].text)
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setArchiveAcVisible(false)
+        return
+      }
+    }
+
+    // Let section autocomplete handle these keys when active
     if (acActive && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Escape')) {
       return // SectionAutocomplete's global handler will catch these
     }
@@ -119,6 +190,7 @@ export function NodeRow({
       setEditText(node.text)
       setEditing(false)
       setAcActive(false)
+      setArchiveAcVisible(false)
     }
   }
 
@@ -133,11 +205,12 @@ export function NodeRow({
     const closeIdx = textBefore.lastIndexOf(']]')
 
     if (openIdx >= 0 && openIdx > closeIdx) {
-      // We're inside a [[ ... sequence
+      // We're inside a [[ ... sequence — use section autocomplete
       const query = textBefore.slice(openIdx + 2)
       acStartPos.current = openIdx
       setAcQuery(query)
       setAcActive(true)
+      setArchiveAcVisible(false)
       // Position the dropdown near the input
       if (inputRef.current) {
         const rect = inputRef.current.getBoundingClientRect()
@@ -146,6 +219,10 @@ export function NodeRow({
     } else {
       setAcActive(false)
       setAcQuery('')
+      // Archive autocomplete — only for items, not sections
+      if (node.type === 'item') {
+        fetchArchiveAc(val)
+      }
     }
   }
 
@@ -183,6 +260,11 @@ export function NodeRow({
       // Section not found — could show a toast, but for now just ignore
     }
   }
+
+  // Long-press delete confirm on detail button
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const detailLpTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const detailLpFired = useRef(false)
 
   // Context menu state — desktop right-click only, not mobile long-press
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
@@ -346,10 +428,8 @@ export function NodeRow({
               value={editText}
               onChange={handleInputChange}
               onBlur={() => {
-                // Delay to allow autocomplete mousedown to fire
-                setTimeout(() => {
-                  if (!acActive) commitEdit()
-                }, 150)
+                // Delay to allow autocomplete mousedown to fire first
+                setTimeout(() => commitEdit(), 150)
               }}
               onKeyDown={handleKeyDown}
               className="w-full bg-transparent border-none outline-none text-gray-900 dark:text-white text-sm p-0"
@@ -362,6 +442,25 @@ export function NodeRow({
                 onSelect={handleAcSelect}
                 onClose={() => { setAcActive(false); setAcQuery('') }}
               />
+            )}
+            {archiveAcVisible && archiveAc.length > 0 && !acActive && (
+              <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
+                {archiveAc.map((s, i) => (
+                  <button
+                    key={s.text}
+                    className={`w-full px-3 py-1.5 text-left text-sm flex items-center justify-between transition-colors ${
+                      i === archiveAcIndex ? 'bg-blue-50 dark:bg-blue-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      selectArchiveAc(s.text)
+                    }}
+                  >
+                    <span className="text-gray-900 dark:text-white truncate">{s.text}</span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500 ml-2 flex-shrink-0">{s.frequency}x</span>
+                  </button>
+                ))}
+              </div>
             )}
           </div>
         ) : (
@@ -405,13 +504,37 @@ export function NodeRow({
           </button>
         )}
 
-        {/* Detail button (items) / Delete button (sections) */}
+        {/* Detail button (items): tap → details, long-press → delete confirm */}
         {node.type === 'item' && onOpenDetail ? (
           <button
             className="p-1 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0"
-            onClick={(e) => { e.stopPropagation(); onOpenDetail() }}
+            onPointerDown={(e) => {
+              e.stopPropagation()
+              detailLpFired.current = false
+              detailLpTimer.current = setTimeout(() => {
+                detailLpFired.current = true
+                setDeleteConfirm(true)
+              }, 500)
+            }}
+            onPointerUp={(e) => {
+              e.stopPropagation()
+              if (detailLpTimer.current) {
+                clearTimeout(detailLpTimer.current)
+                detailLpTimer.current = null
+              }
+              if (!detailLpFired.current) {
+                onOpenDetail()
+              }
+            }}
+            onPointerLeave={() => {
+              if (detailLpTimer.current) {
+                clearTimeout(detailLpTimer.current)
+                detailLpTimer.current = null
+              }
+            }}
+            onClick={(e) => e.stopPropagation()}
             tabIndex={-1}
-            title="Details"
+            title="Details (long-press to delete)"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -442,6 +565,29 @@ export function NodeRow({
           <button className="w-full px-3 py-1 text-left text-xs text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800" onClick={handleCopy}>Copy</button>
           <div className="mx-2 my-0.5 border-t border-gray-100 dark:border-gray-800" />
           <button className="w-full px-3 py-1 text-left text-xs text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-30" onClick={handlePaste} disabled={!onPaste}>Paste</button>
+        </div>
+      )}
+
+      {/* Delete confirm panel */}
+      {deleteConfirm && (
+        <div
+          style={{ paddingLeft: `${indent + 8}px` }}
+          className="flex items-center gap-2 py-1.5 px-2"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <span className="text-sm text-red-500">Delete this item?</span>
+          <button
+            onClick={() => { setDeleteConfirm(false); onDelete() }}
+            className="px-3 py-1.5 text-xs font-medium bg-red-500 text-white rounded-lg hover:bg-red-600"
+          >
+            Delete
+          </button>
+          <button
+            onClick={() => setDeleteConfirm(false)}
+            className="px-3 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+          >
+            Cancel
+          </button>
         </div>
       )}
 

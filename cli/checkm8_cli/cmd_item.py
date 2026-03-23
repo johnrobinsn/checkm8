@@ -237,6 +237,49 @@ def prune(list_ref: str, section: str | None, yes: bool, as_json: bool):
         console.print(f"[green]✓[/green] Pruned {len(deleted)} checked item{'s' if len(deleted) != 1 else ''}")
 
 
+@item_cmd.command("archived")
+@click.argument("list_ref")
+@click.option("--offset", default=0, type=int, help="Start offset (default 0)")
+@click.option("--limit", default=20, type=int, help="Max items to return (default 20)")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def archived(list_ref: str, offset: int, limit: int, as_json: bool):
+    """List archived items, most recently completed first."""
+    lists = api_get("/lists")
+    lst = resolve_list_id(lists, list_ref)
+    if not lst:
+        console.print(f"[red]Error:[/red] List '{list_ref}' not found.")
+        raise SystemExit(1)
+
+    data = api_get(f"/lists/{lst['id']}/nodes/archived", params={"offset": offset, "limit": limit})
+    items = data["items"]
+    total = data["total"]
+
+    if as_json:
+        print_json(data)
+        return
+
+    if not items:
+        console.print("[dim]No archived items.[/dim]")
+        return
+
+    from rich.table import Table
+    table = Table(show_header=True, title=f"Archived items ({offset + 1}–{offset + len(items)} of {total})")
+    table.add_column("#", style="dim", justify="right", width=4)
+    table.add_column("Text", style="bold")
+    table.add_column("Completed", style="dim")
+    table.add_column("ID", style="dim", max_width=8)
+
+    for i, item in enumerate(items, start=offset + 1):
+        completed = item.get("checked_at") or item.get("updated_at") or ""
+        if completed:
+            completed = completed[:16].replace("T", " ")
+        table.add_row(str(i), item["text"] or "[italic]untitled[/italic]", completed, item["id"][:8])
+
+    console.print(table)
+    if offset + len(items) < total:
+        console.print(f"[dim]Use --offset {offset + len(items)} to see more[/dim]")
+
+
 @item_cmd.command("delete")
 @click.argument("list_ref")
 @click.argument("item_ref")

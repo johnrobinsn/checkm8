@@ -109,11 +109,17 @@ async def create_node(
     return dict(rows[0])
 
 
-async def get_nodes(db: aiosqlite.Connection, list_id: str) -> list[dict]:
-    rows = await db.execute_fetchall(
-        "SELECT * FROM nodes WHERE list_id = ? ORDER BY position ASC",
-        (list_id,),
-    )
+async def get_nodes(db: aiosqlite.Connection, list_id: str, include_archived: bool = False) -> list[dict]:
+    if include_archived:
+        rows = await db.execute_fetchall(
+            "SELECT * FROM nodes WHERE list_id = ? ORDER BY position ASC",
+            (list_id,),
+        )
+    else:
+        rows = await db.execute_fetchall(
+            "SELECT * FROM nodes WHERE list_id = ? AND archived = 0 ORDER BY position ASC",
+            (list_id,),
+        )
     return [dict(r) for r in rows]
 
 
@@ -138,6 +144,15 @@ async def update_node(db: aiosqlite.Connection, node_id: str, updates: dict) -> 
         else:
             set_clauses.append(f"{key} = ?")
             values.append(updates[key])
+
+    # Track checked_at: set on check, clear on uncheck
+    if "checked" in updates and updates["checked"] is not None:
+        if updates["checked"]:
+            set_clauses.append("checked_at = datetime('now')")
+        else:
+            set_clauses.append("checked_at = NULL")
+            # Unchecking also un-archives
+            set_clauses.append("archived = 0")
 
     if not set_clauses:
         rows = await db.execute_fetchall("SELECT * FROM nodes WHERE id = ?", (node_id,))
@@ -306,6 +321,91 @@ async def resolve_section(
             (name, user_id, user_id, current_list_id or ""),
         )
     return dict(rows[0]) if rows else None
+
+
+async def archive_eligible_nodes(db: aiosqlite.Connection, list_id: str, minutes: int) -> list[str]:
+    """Archive checked items older than `minutes`. Returns list of archived node IDs."""
+    rows = await db.execute_fetchall(
+        """
+        SELECT id FROM nodes
+        WHERE list_id = ? AND checked = 1 AND archived = 0
+          AND checked_at IS NOT NULL
+          AND checked_at <= datetime('now', ? || ' minutes')
+        """,
+        (list_id, str(-minutes)),
+    )
+    if not rows:
+        return []
+    ids = [r["id"] for r in rows]
+    placeholders = ",".join("?" for _ in ids)
+    await db.execute(
+        f"UPDATE nodes SET archived = 1, updated_at = datetime('now') WHERE id IN ({placeholders})",
+        ids,
+    )
+    await db.commit()
+    return ids
+
+
+async def get_autocomplete(db: aiosqlite.Connection, list_id: str, query: str) -> list[dict]:
+    """Return top 3 archived item texts matching query (or top 3 by frequency if query is empty)."""
+    if query:
+        rows = await db.execute_fetchall(
+            """
+            SELECT text, COUNT(*) as frequency
+            FROM nodes
+            WHERE list_id = ? AND archived = 1 AND type = 'item'
+              AND LOWER(text) LIKE LOWER(?)
+            GROUP BY LOWER(text)
+            ORDER BY frequency DESC
+            LIMIT 3
+            """,
+            (list_id, f"%{query}%"),
+        )
+    else:
+        rows = await db.execute_fetchall(
+            """
+            SELECT text, COUNT(*) as frequency
+            FROM nodes
+            WHERE list_id = ? AND archived = 1 AND type = 'item'
+            GROUP BY LOWER(text)
+            ORDER BY frequency DESC
+            LIMIT 3
+            """,
+            (list_id,),
+        )
+    return [{"text": r["text"], "frequency": r["frequency"]} for r in rows]
+
+
+async def list_archived(db: aiosqlite.Connection, list_id: str, offset: int = 0, limit: int = 50) -> tuple[list[dict], int]:
+    """Return archived items sorted by checked_at DESC, with total count."""
+    row = await db.execute_fetchall(
+        "SELECT COUNT(*) as total FROM nodes WHERE list_id = ? AND archived = 1 AND type = 'item'",
+        (list_id,),
+    )
+    total = row[0]["total"] if row else 0
+    rows = await db.execute_fetchall(
+        """
+        SELECT * FROM nodes
+        WHERE list_id = ? AND archived = 1 AND type = 'item'
+        ORDER BY checked_at DESC, updated_at DESC
+        LIMIT ? OFFSET ?
+        """,
+        (list_id, limit, offset),
+    )
+    return [dict(r) for r in rows], total
+
+
+async def clear_archived(db: aiosqlite.Connection, list_id: str) -> int:
+    """Delete all archived nodes for a list. Returns count deleted."""
+    rows = await db.execute_fetchall(
+        "SELECT id FROM nodes WHERE list_id = ? AND archived = 1",
+        (list_id,),
+    )
+    count = 0
+    for row in rows:
+        await delete_node(db, row["id"])
+        count += 1
+    return count
 
 
 async def delete_node(db: aiosqlite.Connection, node_id: str):

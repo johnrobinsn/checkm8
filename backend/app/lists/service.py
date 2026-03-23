@@ -102,6 +102,47 @@ async def delete_list(db: aiosqlite.Connection, list_id: str):
     await db.commit()
 
 
+async def get_settings(db: aiosqlite.Connection, list_id: str) -> dict:
+    """Get list settings, returning defaults if no row exists."""
+    rows = await db.execute_fetchall(
+        "SELECT * FROM list_settings WHERE list_id = ?", (list_id,)
+    )
+    if rows:
+        return dict(rows[0])
+    return {"list_id": list_id, "auto_archive_enabled": 0, "auto_archive_minutes": 60}
+
+
+async def update_settings(db: aiosqlite.Connection, list_id: str, updates: dict) -> dict:
+    """Upsert list settings."""
+    existing = await db.execute_fetchall(
+        "SELECT * FROM list_settings WHERE list_id = ?", (list_id,)
+    )
+    if existing:
+        set_clauses = []
+        values = []
+        for key in ("auto_archive_enabled", "auto_archive_minutes"):
+            if key in updates and updates[key] is not None:
+                val = int(updates[key]) if key == "auto_archive_enabled" else updates[key]
+                set_clauses.append(f"{key} = ?")
+                values.append(val)
+        if set_clauses:
+            values.append(list_id)
+            await db.execute(
+                f"UPDATE list_settings SET {', '.join(set_clauses)} WHERE list_id = ?",
+                values,
+            )
+            await db.commit()
+    else:
+        enabled = int(updates.get("auto_archive_enabled", False))
+        minutes = updates.get("auto_archive_minutes", 60)
+        await db.execute(
+            "INSERT INTO list_settings (list_id, auto_archive_enabled, auto_archive_minutes) VALUES (?, ?, ?)",
+            (list_id, enabled, minutes),
+        )
+        await db.commit()
+    return await get_settings(db, list_id)
+
+
 async def search_lists(db: aiosqlite.Connection, user_id: str, query: str) -> list[dict]:
     pattern = f"%{query}%"
     # Find lists matching by title

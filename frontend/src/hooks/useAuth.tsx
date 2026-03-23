@@ -31,9 +31,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     getMe()
       .then(setUser)
-      .catch(() => {
-        clearToken()
-        setTokenState(null)
+      .catch((err) => {
+        // Only clear token on explicit 401 (handled by apiFetch).
+        // Network errors / server downtime should not wipe credentials.
+        if (err?.message === 'Unauthorized') {
+          clearToken()
+          setTokenState(null)
+        }
       })
       .finally(() => setLoading(false))
   }, [token])

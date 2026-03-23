@@ -33,11 +33,13 @@ export interface NodeOut {
   type: NodeType
   text: string
   checked: boolean
+  checked_at: string | null
   notes: string | null
   priority: Priority | null
   due_date: string | null
   position: number
   pinned: boolean
+  archived: boolean
   created_at: string
   updated_at: string
 }
@@ -106,12 +108,23 @@ export interface TreeNode extends NodeOut {
   depth: number
 }
 
+export interface ListSettings {
+  auto_archive_enabled: boolean
+  auto_archive_minutes: number
+}
+
+export interface AutocompleteSuggestion {
+  text: string
+  frequency: number
+}
+
 // WebSocket message types
 export type WsMessage =
   | { type: 'node_created'; node: NodeOut }
   | { type: 'node_updated'; node: NodeOut }
   | { type: 'node_moved'; node: NodeOut }
   | { type: 'node_deleted'; node_id: string }
+  | { type: 'nodes_archived'; node_ids: string[] }
   | { type: 'presence'; users: PresenceUser[] }
 
 export interface PresenceUser {

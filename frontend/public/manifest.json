@@ -3,10 +3,10 @@
   "short_name": "checkm8",
   "description": "Collaborative shared to-do lists",
   "start_url": "/",
-  "display": "standalone",
+  "display": "fullscreen",
   "background_color": "#030712",
   "theme_color": "#030712",
-  "orientation": "any",
+  "orientation": "portrait",
   "icons": [
     {
       "src": "/icon-192.png",

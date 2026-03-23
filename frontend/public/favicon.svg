@@ -1,9 +1,4 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
-  <!-- Background rounded square -->
   <rect width="48" height="48" rx="10" fill="#2563eb"/>
-  <!-- Checkmark -->
   <path d="M13 25 l6 6 L35 15" stroke="#ffffff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-  <!-- Small chess piece base (abstract knight/rook) -->
-  <rect x="16" y="35" width="16" height="3" rx="1" fill="rgba(255,255,255,0.5)"/>
-  <rect x="18" y="32" width="12" height="3" rx="1" fill="rgba(255,255,255,0.35)"/>
 </svg>

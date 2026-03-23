@@ -138,6 +138,15 @@ export function TreeView({
   const previewDepthRef = useRef<number | null>(null)
   const [detailNodeId, setDetailNodeId] = useState<string | null>(null)
 
+  // Auto-enter edit mode when a newly focused node has empty text (just created)
+  useEffect(() => {
+    if (!focusedId) return
+    const node = visibleNodes.find((n) => n.id === focusedId)
+    if (node && node.type === 'item' && node.text === '') {
+      setEditingNodeId(focusedId)
+    }
+  }, [focusedId, visibleNodes])
+
   // Touch scroll with momentum (needed because touch-action: none disables browser scroll)
   const dragActiveRef = useRef(false)
   const scrollContainerRef = useRef<HTMLElement | null>(null)
@@ -257,10 +266,19 @@ export function TreeView({
       const desiredDepth = previewDepthRef.current ?? getNodeDepth(nodes, activeId)
 
       const dbg = document.getElementById('sensor-debug')
+      const log = (msg: string) => { if (dbg) dbg.textContent = (dbg.textContent || '') + '\n' + msg }
+      if (dbg) dbg.textContent = '--- DROP ---'
+
+      const activeText = activeNode.text || activeId.slice(0,8)
+      log(`active="${activeText}" dnd-over=${over ? (over.id as string).slice(0,8) : 'NULL'} same=${over?.id === active.id} deltaX=${deltaX.toFixed(0)} deltaY=${(event.delta?.y ?? 0).toFixed(0)} desiredDepth=${desiredDepth}`)
+
+      // Resolve the "over" node — use dnd-kit's collision detection, with a fallback
+      // to pointer-Y proximity when closestCenter returns null (common at section boundaries)
+      let resolvedOverId: string | null = over && over.id !== active.id ? (over.id as string) : null
 
       // Indent/outdent: horizontal drag dropped on self
-      if (!over || active.id === over.id) {
-        if (dbg) dbg.textContent = `drop: over=${over?.id ?? 'null'} self=${active.id} deltaX=${deltaX.toFixed(0)}`
+      if (!resolvedOverId) {
+        log(`no resolvedOver, checking indent/outdent`)
         if (Math.abs(deltaX) > indentThreshold) {
           if (deltaX < 0 && activeNode.parent_id) {
             const parent = nodes.find((n) => n.id === activeNode.parent_id)
@@ -280,16 +298,44 @@ export function TreeView({
             }
           }
         }
-        return
+
+        // Fallback: find closest node by pointer Y position
+        if (containerRef.current) {
+          let startY: number | null = null
+          if (activatorEvent instanceof PointerEvent) {
+            startY = activatorEvent.clientY
+          } else if (activatorEvent instanceof TouchEvent && activatorEvent.touches.length > 0) {
+            startY = activatorEvent.touches[0].clientY
+          }
+          if (startY !== null) {
+            const pointerY = startY + (event.delta?.y ?? 0)
+            let closestDist = Infinity
+            for (const vn of visibleNodes) {
+              if (vn.id === activeId) continue
+              const el = containerRef.current.querySelector(`[data-node-id="${vn.id}"]`)
+              if (!el) continue
+              const rect = el.getBoundingClientRect()
+              const mid = rect.top + rect.height / 2
+              const dist = Math.abs(pointerY - mid)
+              if (dist < closestDist) {
+                closestDist = dist
+                resolvedOverId = vn.id
+              }
+            }
+          }
+        }
+
+        if (!resolvedOverId) return
+        log(`fallback over=${resolvedOverId.slice(0,8)}`)
       }
 
       // Vertical reorder — dropped on a different node
-      const overNode = nodes.find((n) => n.id === (over.id as string))
-      if (!overNode) { if (dbg) dbg.textContent = 'drop: overNode not found'; return }
-      if (overNode.parent_id === activeId) { if (dbg) dbg.textContent = 'drop: over is child of active'; return }
+      const overNode = nodes.find((n) => n.id === resolvedOverId)
+      if (!overNode) { log('overNode not found'); return }
+      if (overNode.parent_id === activeId) { log('over is child of active'); return }
 
-      const overDepth = getNodeDepth(nodes, over.id as string)
-      if (dbg) dbg.textContent = `drop: over=${(over.id as string).slice(0,8)} oD=${overDepth} dD=${desiredDepth} refD=${desiredDepth}`
+      const overDepth = getNodeDepth(nodes, resolvedOverId)
+      log(`over="${overNode.text}" oD=${overDepth} dD=${desiredDepth}`)
 
       // Use desiredDepth (from preview) to determine the correct parent.
       // Walk up from over node to find the reference node at the right level.
@@ -304,7 +350,7 @@ export function TreeView({
 
       // Determine drop above/below the reference node
       let dropAbove = false
-      const overEl = containerRef.current?.querySelector(`[data-node-id="${over.id}"]`)
+      const overEl = containerRef.current?.querySelector(`[data-node-id="${resolvedOverId}"]`)
       if (overEl) {
         const rect = overEl.getBoundingClientRect()
         let startY: number | null = null
@@ -320,28 +366,48 @@ export function TreeView({
         }
       }
 
+      log(`ref="${refNode.text}" refD=${refDepth} dropAbove=${dropAbove} branch=${desiredDepth === refDepth + 1 ? 'cross-section' : 'same-level'}`)
+
+      // Helper: find previous visible node at a given depth (uses visual order, not data order)
+      const findPrevAtDepth = (nodeId: string, depth: number) => {
+        const idx = visibleNodes.findIndex((n) => n.id === nodeId)
+        for (let i = idx - 1; i >= 0; i--) {
+          if (visibleNodes[i].depth === depth && visibleNodes[i].id !== activeId) {
+            return nodes.find((n) => n.id === visibleNodes[i].id) ?? null
+          }
+        }
+        return null
+      }
+
+      // Helper: find the last visible child of a section (visual order)
+      const findLastVisibleChild = (parentId: string) => {
+        const children = visibleNodes.filter((n) => n.parent_id === parentId && n.id !== activeId)
+        return children.length > 0 ? children[children.length - 1] : null
+      }
+
+      // Helper: find previous visible sibling (same parent, visual order)
+      const findPrevVisibleSibling = (nodeId: string, parentId: string | null) => {
+        const siblings = visibleNodes.filter((n) => n.parent_id === parentId && n.id !== activeId)
+        const idx = siblings.findIndex((n) => n.id === nodeId)
+        return idx > 0 ? siblings[idx - 1] : null
+      }
+
       if (desiredDepth === refDepth + 1) {
         if (dropAbove) {
           // Finger is ABOVE the section header → item belongs at end of PREVIOUS section
-          const sectionSiblings = nodes
-            .filter((n) => n.parent_id === refNode.parent_id && n.id !== activeId)
-            .sort((a, b) => a.position - b.position)
-          const refIdx = sectionSiblings.findIndex((s) => s.id === refNode.id)
-          if (refIdx > 0) {
-            const prevSection = sectionSiblings[refIdx - 1]
-            const prevChildren = nodes
-              .filter((n) => n.parent_id === prevSection.id && n.id !== activeId)
-              .sort((a, b) => a.position - b.position)
-            if (dbg) dbg.textContent = `MOVE into prev "${prevSection.text}" | over="${overNode.text}" oD=${overDepth} dD=${desiredDepth}`
-            onMoveNode(activeId, prevSection.id, prevChildren.length > 0 ? prevChildren[prevChildren.length - 1].id : null, prevChildren.length === 0)
+          const prevSection = findPrevAtDepth(refNode.id, refDepth)
+          if (prevSection) {
+            const lastChild = findLastVisibleChild(prevSection.id)
+            log(`→ MOVE into prev section "${prevSection.text}" after="${lastChild?.text ?? 'BEGIN'}" (dropAbove cross-section)`)
+            onMoveNode(activeId, prevSection.id, lastChild?.id ?? null, !lastChild)
           } else {
             // No previous section — place at beginning of this section
-            if (dbg) dbg.textContent = `MOVE into "${refNode.text}" atBegin (no prev) | over="${overNode.text}" oD=${overDepth} dD=${desiredDepth}`
+            log(`→ MOVE into "${refNode.text}" atBegin (no prev section)`)
             onMoveNode(activeId, refNode.id, null, true)
           }
         } else {
           // Finger is BELOW the section header → item goes into THIS section
-          if (dbg) dbg.textContent = `MOVE into "${refNode.text}" atBegin | over="${overNode.text}" oD=${overDepth} dD=${desiredDepth}`
+          log(`→ MOVE into "${refNode.text}" atBegin (dropBelow cross-section)`)
           onMoveNode(activeId, refNode.id, null, true)
         }
       } else {
@@ -349,18 +415,27 @@ export function TreeView({
         const parentId = refNode.parent_id
         const parentNode = parentId ? nodes.find((n) => n.id === parentId) : null
         if (dropAbove) {
-          const siblings = nodes
-            .filter((n) => n.parent_id === parentId && n.id !== activeId)
-            .sort((a, b) => a.position - b.position)
-          const refIdx = siblings.findIndex((s) => s.id === refNode.id)
-          if (refIdx <= 0) {
-            if (dbg) dbg.textContent = `MOVE sibling parent="${parentNode?.text ?? 'root'}" atBegin | over="${overNode.text}" oD=${overDepth} dD=${desiredDepth}`
+          const prevSibling = findPrevVisibleSibling(refNode.id, parentId)
+          if (!prevSibling && parentNode) {
+            // Dropping above the first item in a section — check if there's a previous section
+            const prevSection = findPrevAtDepth(parentNode.id, getNodeDepth(nodes, parentNode.id))
+            if (prevSection) {
+              const lastChild = findLastVisibleChild(prevSection.id)
+              log(`→ MOVE into prev section "${prevSection.text}" after="${lastChild?.text ?? 'BEGIN'}" (drop above first child)`)
+              onMoveNode(activeId, prevSection.id, lastChild?.id ?? null, !lastChild)
+            } else {
+              log(`→ MOVE sibling atBegin parent="${parentNode?.text ?? 'root'}" (no prev section)`)
+              onMoveNode(activeId, parentId, null, true)
+            }
+          } else if (!prevSibling) {
+            log(`→ MOVE sibling atBegin parent="${parentNode?.text ?? 'root'}" (no parentNode)`)
             onMoveNode(activeId, parentId, null, true)
           } else {
-            if (dbg) dbg.textContent = `MOVE sibling parent="${parentNode?.text ?? 'root'}" after="${siblings[refIdx - 1].text}" | over="${overNode.text}" oD=${overDepth} dD=${desiredDepth}`
-            onMoveNode(activeId, parentId, siblings[refIdx - 1].id)
+            log(`→ MOVE sibling after="${prevSibling.text}" parent="${parentNode?.text ?? 'root'}"`)
+            onMoveNode(activeId, parentId, prevSibling.id)
           }
         } else {
+          log(`→ MOVE sibling after ref="${refNode.text}" parent="${parentNode?.text ?? 'root'}" (dropBelow)`)
           onMoveNode(activeId, parentId, refNode.id)
         }
       }
@@ -520,7 +595,24 @@ export function TreeView({
       onTouchEnd={handleTouchEnd}
     >
       {/* Debug overlay — remove after fixing touch drag */}
-      <div id="sensor-debug" className="fixed top-0 left-0 right-0 z-[9999] bg-black/80 text-green-400 text-xs font-mono px-2 py-1 pointer-events-none hidden">
+      <div id="sensor-debug" className="fixed top-0 left-0 right-0 z-[9999] bg-black/80 text-green-400 text-xs font-mono px-2 py-1 whitespace-pre-wrap" style={{ maxHeight: '30vh', overflow: 'auto' }}
+        onClick={(e) => {
+          const el = e.currentTarget
+          const text = el.textContent || ''
+          navigator.clipboard.writeText(text).then(() => {
+            const orig = el.style.borderColor
+            el.style.borderColor = '#4ade80'
+            el.style.borderWidth = '2px'
+            el.style.borderStyle = 'solid'
+            const badge = document.createElement('span')
+            badge.textContent = ' Copied!'
+            badge.style.color = '#4ade80'
+            badge.style.fontWeight = 'bold'
+            el.appendChild(badge)
+            setTimeout(() => { badge.remove(); el.style.borderColor = orig; el.style.borderWidth = ''; el.style.borderStyle = '' }, 1000)
+          })
+        }}
+      >
         sensor: idle
       </div>
       <DndContext

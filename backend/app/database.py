@@ -46,13 +46,21 @@ CREATE TABLE IF NOT EXISTS nodes (
     type TEXT NOT NULL CHECK(type IN ('item', 'section')),
     text TEXT NOT NULL DEFAULT '',
     checked INTEGER NOT NULL DEFAULT 0,
+    checked_at TEXT,
     notes TEXT,
     priority TEXT CHECK(priority IN ('high', 'medium', 'low', NULL)),
     due_date TEXT,
     position REAL NOT NULL,
     pinned INTEGER NOT NULL DEFAULT 0,
+    archived INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS list_settings (
+    list_id TEXT PRIMARY KEY REFERENCES lists(id) ON DELETE CASCADE,
+    auto_archive_enabled INTEGER NOT NULL DEFAULT 0,
+    auto_archive_minutes INTEGER NOT NULL DEFAULT 60
 );
 
 CREATE TABLE IF NOT EXISTS device_codes (
@@ -103,4 +111,24 @@ async def init_db(db_path: str | None = None):
             await db.execute("ALTER TABLE nodes ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0")
         except Exception:
             pass  # column already exists
+        # Migration: add checked_at column
+        try:
+            await db.execute("ALTER TABLE nodes ADD COLUMN checked_at TEXT")
+            # Backfill: set checked_at for already-checked items
+            await db.execute("UPDATE nodes SET checked_at = datetime('now') WHERE checked = 1 AND checked_at IS NULL")
+        except Exception:
+            pass  # column already exists
+        # Migration: add archived column
+        try:
+            await db.execute("ALTER TABLE nodes ADD COLUMN archived INTEGER NOT NULL DEFAULT 0")
+        except Exception:
+            pass  # column already exists
+        # Backfill: archive already-checked items on lists with auto-archive enabled
+        await db.execute("""
+            UPDATE nodes SET archived = 1
+            WHERE checked = 1 AND archived = 0
+              AND list_id IN (SELECT list_id FROM list_settings WHERE auto_archive_enabled = 1)
+        """)
+        # Create index on archived (after column exists)
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_nodes_archived ON nodes(list_id, archived)")
         await db.commit()

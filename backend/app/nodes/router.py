@@ -1,18 +1,19 @@
 import aiosqlite
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.auth.dependencies import get_current_user
 from app.database import get_db
 from app.lists.service import check_write_permission, get_accessible_list
-from app.nodes.service import create_node, delete_node, get_node, get_nodes, import_nodes, move_node, update_node
-from app.schemas import ImportRequest, NodeCreate, NodeMove, NodeOut, NodeUpdate
+from app.lists.service import get_settings
+from app.nodes.service import archive_eligible_nodes, create_node, delete_node, get_autocomplete, get_node, get_nodes, import_nodes, list_archived, move_node, update_node
+from app.schemas import AutocompleteSuggestion, ImportRequest, NodeCreate, NodeMove, NodeOut, NodeUpdate
 from app.ws.manager import manager
 
 router = APIRouter(prefix="/lists/{list_id}/nodes", tags=["nodes"])
 
 
 def _node_out(node: dict) -> NodeOut:
-    return NodeOut(**{**node, "checked": bool(node["checked"]), "pinned": bool(node.get("pinned", 0))})
+    return NodeOut(**{**node, "checked": bool(node["checked"]), "pinned": bool(node.get("pinned", 0)), "archived": bool(node.get("archived", 0))})
 
 
 @router.get("", response_model=list[NodeOut])
@@ -24,6 +25,12 @@ async def list_nodes(
     lst = await get_accessible_list(db, list_id, user["id"])
     if not lst:
         raise HTTPException(status_code=404, detail="List not found")
+    # Lazy auto-archive: archive eligible items before returning
+    settings = await get_settings(db, list_id)
+    if settings["auto_archive_enabled"]:
+        archived_ids = await archive_eligible_nodes(db, list_id, settings["auto_archive_minutes"])
+        if archived_ids:
+            await manager.broadcast(list_id, {"type": "nodes_archived", "node_ids": archived_ids})
     nodes = await get_nodes(db, list_id)
     return [_node_out(n) for n in nodes]
 
@@ -75,6 +82,33 @@ async def import_batch(
     for out in results:
         await manager.broadcast(list_id, {"type": "node_created", "node": out.model_dump()}, exclude_user=None)
     return results
+
+
+@router.get("/autocomplete", response_model=list[AutocompleteSuggestion])
+async def autocomplete(
+    list_id: str,
+    q: str = "",
+    user: dict = Depends(get_current_user),
+    db: aiosqlite.Connection = Depends(get_db),
+):
+    if not await get_accessible_list(db, list_id, user["id"]):
+        raise HTTPException(status_code=404, detail="List not found")
+    results = await get_autocomplete(db, list_id, q.strip())
+    return [AutocompleteSuggestion(**r) for r in results]
+
+
+@router.get("/archived")
+async def get_archived(
+    list_id: str,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    user: dict = Depends(get_current_user),
+    db: aiosqlite.Connection = Depends(get_db),
+):
+    if not await get_accessible_list(db, list_id, user["id"]):
+        raise HTTPException(status_code=404, detail="List not found")
+    items, total = await list_archived(db, list_id, offset=offset, limit=limit)
+    return {"items": [_node_out(n).model_dump() for n in items], "total": total, "offset": offset, "limit": limit}
 
 
 @router.get("/{node_id}", response_model=NodeOut)

@@ -7,6 +7,7 @@ import { ListSidebar } from './ListSidebar'
 import { TreeView } from './TreeView'
 import { PresenceBar } from './PresenceBar'
 import { ShareDialog } from './ShareDialog'
+import { ListSettingsDialog } from './ListSettingsDialog'
 import { ToastContainer } from './Toast'
 import * as listsApi from '../api/lists'
 import type { TodoList } from '../types'
@@ -152,6 +153,10 @@ export function AppShell() {
     setSearchIndex(0)
   }, [])
 
+  // Settings dialog state
+  const [settingsOpen, setSettingsOpen] = useState(false)
+
+
   // FAB state
   const [fabMenuOpen, setFabMenuOpen] = useState(false)
   const fabTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -246,6 +251,16 @@ export function AppShell() {
                   </svg>
                 </button>
                 <button
+                  onClick={() => setSettingsOpen(true)}
+                  className="p-1.5 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  title="List settings"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </button>
+                <button
                   onClick={() => setShowShare(true)}
                   className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg flex items-center gap-1.5 transition-colors"
                 >
@@ -333,6 +348,14 @@ export function AppShell() {
           listId={selectedListId}
           isOwner={isOwner}
           onClose={() => setShowShare(false)}
+        />
+      )}
+
+      {/* Settings dialog */}
+      {settingsOpen && selectedListId && (
+        <ListSettingsDialog
+          listId={selectedListId}
+          onClose={() => setSettingsOpen(false)}
         />
       )}
 

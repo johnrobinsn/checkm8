@@ -63,6 +63,11 @@ uv run checkm8 item edit <LIST_REF> <ITEM_REF> "New text"
 # Delete
 uv run checkm8 item delete <LIST_REF> <ITEM_REF> --yes
 
+# List archived items (most recently completed first)
+uv run checkm8 item archived <LIST_REF>
+uv run checkm8 item archived <LIST_REF> --limit 10 --offset 20
+uv run checkm8 item archived <LIST_REF> --json
+
 # All item commands accept --json flag
 ```
 
