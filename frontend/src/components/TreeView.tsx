@@ -75,14 +75,6 @@ function SortableNode({
     id: node.id,
   })
 
-  // Debug: log listener keys once per node
-  useEffect(() => {
-    const el = document.getElementById('sensor-debug')
-    if (el && focused) {
-      el.textContent = `listeners: ${listeners ? Object.keys(listeners).join(', ') : 'null'}`
-    }
-  }, [listeners, focused])
-
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -265,20 +257,12 @@ export function TreeView({
       const indentThreshold = isMobile ? 16 : 24
       const desiredDepth = previewDepthRef.current ?? getNodeDepth(nodes, activeId)
 
-      const dbg = document.getElementById('sensor-debug')
-      const log = (msg: string) => { if (dbg) dbg.textContent = (dbg.textContent || '') + '\n' + msg }
-      if (dbg) dbg.textContent = '--- DROP ---'
-
-      const activeText = activeNode.text || activeId.slice(0,8)
-      log(`active="${activeText}" dnd-over=${over ? (over.id as string).slice(0,8) : 'NULL'} same=${over?.id === active.id} deltaX=${deltaX.toFixed(0)} deltaY=${(event.delta?.y ?? 0).toFixed(0)} desiredDepth=${desiredDepth}`)
-
       // Resolve the "over" node — use dnd-kit's collision detection, with a fallback
       // to pointer-Y proximity when closestCenter returns null (common at section boundaries)
       let resolvedOverId: string | null = over && over.id !== active.id ? (over.id as string) : null
 
       // Indent/outdent: horizontal drag dropped on self
       if (!resolvedOverId) {
-        log(`no resolvedOver, checking indent/outdent`)
         if (Math.abs(deltaX) > indentThreshold) {
           if (deltaX < 0 && activeNode.parent_id) {
             const parent = nodes.find((n) => n.id === activeNode.parent_id)
@@ -326,16 +310,14 @@ export function TreeView({
         }
 
         if (!resolvedOverId) return
-        log(`fallback over=${resolvedOverId.slice(0,8)}`)
       }
 
       // Vertical reorder — dropped on a different node
       const overNode = nodes.find((n) => n.id === resolvedOverId)
-      if (!overNode) { log('overNode not found'); return }
-      if (overNode.parent_id === activeId) { log('over is child of active'); return }
+      if (!overNode) return
+      if (overNode.parent_id === activeId) return
 
       const overDepth = getNodeDepth(nodes, resolvedOverId)
-      log(`over="${overNode.text}" oD=${overDepth} dD=${desiredDepth}`)
 
       // Use desiredDepth (from preview) to determine the correct parent.
       // Walk up from over node to find the reference node at the right level.
@@ -366,7 +348,6 @@ export function TreeView({
         }
       }
 
-      log(`ref="${refNode.text}" refD=${refDepth} dropAbove=${dropAbove} branch=${desiredDepth === refDepth + 1 ? 'cross-section' : 'same-level'}`)
 
       // Helper: find previous visible node at a given depth (uses visual order, not data order)
       const findPrevAtDepth = (nodeId: string, depth: number) => {
@@ -398,16 +379,13 @@ export function TreeView({
           const prevSection = findPrevAtDepth(refNode.id, refDepth)
           if (prevSection) {
             const lastChild = findLastVisibleChild(prevSection.id)
-            log(`→ MOVE into prev section "${prevSection.text}" after="${lastChild?.text ?? 'BEGIN'}" (dropAbove cross-section)`)
             onMoveNode(activeId, prevSection.id, lastChild?.id ?? null, !lastChild)
           } else {
             // No previous section — place at beginning of this section
-            log(`→ MOVE into "${refNode.text}" atBegin (no prev section)`)
             onMoveNode(activeId, refNode.id, null, true)
           }
         } else {
           // Finger is BELOW the section header → item goes into THIS section
-          log(`→ MOVE into "${refNode.text}" atBegin (dropBelow cross-section)`)
           onMoveNode(activeId, refNode.id, null, true)
         }
       } else {
@@ -421,21 +399,16 @@ export function TreeView({
             const prevSection = findPrevAtDepth(parentNode.id, getNodeDepth(nodes, parentNode.id))
             if (prevSection) {
               const lastChild = findLastVisibleChild(prevSection.id)
-              log(`→ MOVE into prev section "${prevSection.text}" after="${lastChild?.text ?? 'BEGIN'}" (drop above first child)`)
               onMoveNode(activeId, prevSection.id, lastChild?.id ?? null, !lastChild)
             } else {
-              log(`→ MOVE sibling atBegin parent="${parentNode?.text ?? 'root'}" (no prev section)`)
               onMoveNode(activeId, parentId, null, true)
             }
           } else if (!prevSibling) {
-            log(`→ MOVE sibling atBegin parent="${parentNode?.text ?? 'root'}" (no parentNode)`)
             onMoveNode(activeId, parentId, null, true)
           } else {
-            log(`→ MOVE sibling after="${prevSibling.text}" parent="${parentNode?.text ?? 'root'}"`)
             onMoveNode(activeId, parentId, prevSibling.id)
           }
         } else {
-          log(`→ MOVE sibling after ref="${refNode.text}" parent="${parentNode?.text ?? 'root'}" (dropBelow)`)
           onMoveNode(activeId, parentId, refNode.id)
         }
       }
@@ -594,27 +567,6 @@ export function TreeView({
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      {/* Debug overlay — remove after fixing touch drag */}
-      <div id="sensor-debug" className="fixed top-0 left-0 right-0 z-[9999] bg-black/80 text-green-400 text-xs font-mono px-2 py-1 whitespace-pre-wrap" style={{ maxHeight: '30vh', overflow: 'auto' }}
-        onClick={(e) => {
-          const el = e.currentTarget
-          const text = el.textContent || ''
-          navigator.clipboard.writeText(text).then(() => {
-            const orig = el.style.borderColor
-            el.style.borderColor = '#4ade80'
-            el.style.borderWidth = '2px'
-            el.style.borderStyle = 'solid'
-            const badge = document.createElement('span')
-            badge.textContent = ' Copied!'
-            badge.style.color = '#4ade80'
-            badge.style.fontWeight = 'bold'
-            el.appendChild(badge)
-            setTimeout(() => { badge.remove(); el.style.borderColor = orig; el.style.borderWidth = ''; el.style.borderStyle = '' }, 1000)
-          })
-        }}
-      >
-        sensor: idle
-      </div>
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}

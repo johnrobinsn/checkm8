@@ -14,7 +14,15 @@ export function useVisualViewport() {
     if (!vv) return
 
     const update = () => {
-      document.documentElement.style.setProperty('--viewport-height', `${vv.height}px`)
+      // Only override when the virtual keyboard is actively shrinking
+      // the viewport.  Otherwise let the CSS fallback (100dvh) size
+      // the app – it correctly fills fullscreen PWA mode, whereas
+      // vv.height can be shorter than the true screen height.
+      if (vv.height < window.innerHeight - 100) {
+        document.documentElement.style.setProperty('--viewport-height', `${vv.height}px`)
+      } else {
+        document.documentElement.style.removeProperty('--viewport-height')
+      }
     }
 
     update()
