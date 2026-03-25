@@ -160,12 +160,12 @@ async def search_lists(db: aiosqlite.Connection, user_id: str, query: str) -> li
         """
         SELECT DISTINCT l.* FROM lists l
         JOIN nodes n ON n.list_id = l.id
-        WHERE l.owner_id = ? AND (n.text LIKE ? OR n.notes LIKE ?) AND l.archived = 0
+        WHERE l.owner_id = ? AND n.archived = 0 AND (n.text LIKE ? OR n.notes LIKE ?) AND l.archived = 0
         UNION
         SELECT DISTINCT l.* FROM lists l
         JOIN list_shares s ON s.list_id = l.id
         JOIN nodes n ON n.list_id = l.id
-        WHERE s.user_id = ? AND (n.text LIKE ? OR n.notes LIKE ?) AND l.archived = 0
+        WHERE s.user_id = ? AND n.archived = 0 AND (n.text LIKE ? OR n.notes LIKE ?) AND l.archived = 0
         """,
         (user_id, pattern, pattern, user_id, pattern, pattern),
     )
@@ -182,7 +182,7 @@ async def search_lists(db: aiosqlite.Connection, user_id: str, query: str) -> li
         matching_nodes = await db.execute_fetchall(
             """
             SELECT id, type, text, notes FROM nodes
-            WHERE list_id = ? AND (text LIKE ? OR notes LIKE ?)
+            WHERE list_id = ? AND archived = 0 AND (text LIKE ? OR notes LIKE ?)
             LIMIT 5
             """,
             (lst["id"], pattern, pattern),
