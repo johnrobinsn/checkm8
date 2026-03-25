@@ -668,21 +668,6 @@ export function TreeView({
         </DragOverlay>
       </DndContext>
 
-      {/* Add section button — outside DndContext to avoid touch event interference */}
-      {visibleNodes.length > 0 && (
-        <div className="mt-3 ml-1 sm:ml-2">
-          <button
-            type="button"
-            className="px-3 py-2.5 sm:py-1.5 text-sm text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded flex items-center gap-1.5 transition-colors"
-            onClick={() => addSectionWithPrompt()}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16" />
-            </svg>
-            Add section
-          </button>
-        </div>
-      )}
 
       {/* Item detail panel */}
       {detailNodeId && (() => {
