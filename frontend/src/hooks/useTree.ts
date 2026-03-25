@@ -70,10 +70,11 @@ export function useTree(listId: string | null) {
 
   useWebSocket(listId, handleWsMessage)
 
-  // Deduplicate nodes — guards against races between fetch, optimistic add, and WS
+  // Deduplicate and filter archived nodes — guards against races between fetch, optimistic add, and WS
   const uniqueNodes = useMemo(() => {
     const seen = new Set<string>()
     return nodes.filter((n) => {
+      if (n.archived) return false
       if (seen.has(n.id)) return false
       seen.add(n.id)
       return true
