@@ -56,6 +56,7 @@ interface ItemDetailPanelProps {
   node: TreeNode
   onUpdate: (data: NodeUpdate) => void
   onDelete: () => void
+  onDeleteSection?: (deleteChildren: boolean) => void
   onClose: () => void
 }
 
@@ -72,12 +73,13 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-export function ItemDetailPanel({ node, onUpdate, onDelete, onClose }: ItemDetailPanelProps) {
+export function ItemDetailPanel({ node, onUpdate, onDelete, onDeleteSection, onClose }: ItemDetailPanelProps) {
   const [text, setText] = useState(node.text)
   const [notes, setNotes] = useState(node.notes || '')
   const [priority, setPriority] = useState<Priority | null>(node.priority)
   const [dueDate, setDueDate] = useState(node.due_date || '')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteChildren, setDeleteChildren] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
   const notesRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -141,7 +143,11 @@ export function ItemDetailPanel({ node, onUpdate, onDelete, onClose }: ItemDetai
   }
 
   const handleDelete = () => {
-    onDelete()
+    if (node.type === 'section' && onDeleteSection) {
+      onDeleteSection(deleteChildren)
+    } else {
+      onDelete()
+    }
     onClose()
   }
 
@@ -209,7 +215,7 @@ export function ItemDetailPanel({ node, onUpdate, onDelete, onClose }: ItemDetai
         {/* Header */}
         <div className="flex items-center justify-between px-4 pt-2 pb-3 border-b border-gray-100 dark:border-gray-800">
           <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-            Item Details
+            {node.type === 'section' ? 'Section Details' : 'Item Details'}
           </h3>
           <button
             onClick={onClose}
@@ -235,62 +241,66 @@ export function ItemDetailPanel({ node, onUpdate, onDelete, onClose }: ItemDetai
             />
           </div>
 
-          {/* Checked status */}
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Status</label>
-            <button
-              onClick={() => onUpdate({ checked: !node.checked })}
-              className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
-                node.checked
-                  ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-                  : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
-              }`}
-            >
-              {node.checked ? 'Completed' : 'Not done'}
-            </button>
-          </div>
-
-          {/* Priority */}
-          <div>
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Priority</label>
-            <div className="flex gap-2">
-              {PRIORITIES.map((p) => (
+          {node.type !== 'section' && (
+            <>
+              {/* Checked status */}
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Status</label>
                 <button
-                  key={p.label}
-                  onClick={() => handlePriority(p.value)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full transition-all ${
-                    priority === p.value
-                      ? 'ring-2 ring-blue-500 ring-offset-1 dark:ring-offset-gray-900'
-                      : 'opacity-60 hover:opacity-100'
+                  onClick={() => onUpdate({ checked: !node.checked })}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                    node.checked
+                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                      : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
                   }`}
                 >
-                  <div className={`w-2.5 h-2.5 rounded-full ${p.color}`} />
-                  {p.label}
+                  {node.checked ? 'Completed' : 'Not done'}
                 </button>
-              ))}
-            </div>
-          </div>
+              </div>
 
-          {/* Due date */}
-          <div>
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Due date</label>
-            <div className="flex items-center gap-2">
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => handleDueDate(e.target.value)}
-                className="flex-1 px-3 py-2 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white"
-              />
-              {dueDate && (
-                <button
-                  onClick={() => handleDueDate('')}
-                  className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 px-2 py-2"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-          </div>
+              {/* Priority */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Priority</label>
+                <div className="flex gap-2">
+                  {PRIORITIES.map((p) => (
+                    <button
+                      key={p.label}
+                      onClick={() => handlePriority(p.value)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full transition-all ${
+                        priority === p.value
+                          ? 'ring-2 ring-blue-500 ring-offset-1 dark:ring-offset-gray-900'
+                          : 'opacity-60 hover:opacity-100'
+                      }`}
+                    >
+                      <div className={`w-2.5 h-2.5 rounded-full ${p.color}`} />
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Due date */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Due date</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => handleDueDate(e.target.value)}
+                    className="flex-1 px-3 py-2 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white"
+                  />
+                  {dueDate && (
+                    <button
+                      onClick={() => handleDueDate('')}
+                      className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 px-2 py-2"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Notes */}
           <div>
@@ -306,8 +316,8 @@ export function ItemDetailPanel({ node, onUpdate, onDelete, onClose }: ItemDetai
             />
           </div>
 
-          {/* Attachments */}
-          <div>
+          {/* Attachments (items only) */}
+          {node.type !== 'section' && <div>
             <div className="flex items-center justify-between mb-2">
               <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">Attachments</label>
               {uploading ? (
@@ -429,7 +439,7 @@ export function ItemDetailPanel({ node, onUpdate, onDelete, onClose }: ItemDetai
             {attachments.length === 0 && !uploading && !uploadStatus && (
               <p className="text-xs text-gray-400 dark:text-gray-500">No attachments</p>
             )}
-          </div>
+          </div>}
 
           {/* Metadata */}
           <div className="text-xs text-gray-400 dark:text-gray-500 space-y-0.5 pt-1 border-t border-gray-100 dark:border-gray-800">
@@ -441,27 +451,40 @@ export function ItemDetailPanel({ node, onUpdate, onDelete, onClose }: ItemDetai
           {/* Delete */}
           <div className="pt-2">
             {showDeleteConfirm ? (
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-red-500">Delete this item?</span>
-                <button
-                  onClick={handleDelete}
-                  className="px-3 py-1.5 text-xs font-medium bg-red-500 text-white rounded-lg hover:bg-red-600"
-                >
-                  Delete
-                </button>
-                <button
-                  onClick={() => setShowDeleteConfirm(false)}
-                  className="px-3 py-1.5 text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"
-                >
-                  Cancel
-                </button>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-red-500">Delete this {node.type === 'section' ? 'section' : 'item'}?</span>
+                  <button
+                    onClick={handleDelete}
+                    className="px-3 py-1.5 text-xs font-medium bg-red-500 text-white rounded-lg hover:bg-red-600"
+                  >
+                    Delete
+                  </button>
+                  <button
+                    onClick={() => { setShowDeleteConfirm(false); setDeleteChildren(false) }}
+                    className="px-3 py-1.5 text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                {node.type === 'section' && (
+                  <label className="flex items-center gap-1.5 mt-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={deleteChildren}
+                      onChange={(e) => setDeleteChildren(e.target.checked)}
+                      className="rounded border-gray-300 dark:border-gray-600 text-red-500 focus:ring-red-500"
+                    />
+                    <span className="text-xs text-gray-500 dark:text-gray-400">Delete all items within section</span>
+                  </label>
+                )}
               </div>
             ) : (
               <button
                 onClick={() => setShowDeleteConfirm(true)}
                 className="text-xs text-red-400 hover:text-red-500 transition-colors"
               >
-                Delete item...
+                Delete {node.type === 'section' ? 'section' : 'item'}...
               </button>
             )}
           </div>

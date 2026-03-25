@@ -16,6 +16,7 @@ interface NodeRowProps {
   onUpdate: (data: NodeUpdate) => void
   onFocus: () => void
   onDelete: () => void
+  onDeleteSection?: (deleteChildren: boolean) => void
   onEditingChange?: (editing: boolean) => void
   onNavigateToSection?: (listId: string, sectionId: string) => void
   onOpenDetail?: () => void
@@ -32,6 +33,7 @@ export function NodeRow({
   onUpdate,
   onFocus,
   onDelete,
+  onDeleteSection,
   onEditingChange,
   onNavigateToSection,
   onOpenDetail,
@@ -61,11 +63,7 @@ export function NodeRow({
       setDeleteConfirm(false)
     }
   }, [focused])
-  const [showNotes, setShowNotes] = useState(false)
-  const [editingNotes, setEditingNotes] = useState(false)
-  const [notesText, setNotesText] = useState(node.notes || '')
   const inputRef = useRef<HTMLInputElement>(null)
-  const notesRef = useRef<HTMLTextAreaElement>(null)
 
   // Section autocomplete state (triggered by [[)
   const [acQuery, setAcQuery] = useState('')
@@ -91,12 +89,6 @@ export function NodeRow({
   }, [editing])
 
   useEffect(() => {
-    if (editingNotes && notesRef.current) {
-      notesRef.current.focus()
-    }
-  }, [editingNotes])
-
-  useEffect(() => {
     if (!editing) {
       setEditText(node.text)
       setAcActive(false)
@@ -104,8 +96,7 @@ export function NodeRow({
       setArchiveAc([])
       if (archiveAcTimer.current) clearTimeout(archiveAcTimer.current)
     }
-    setNotesText(node.notes || '')
-  }, [node.text, node.notes, editing])
+  }, [node.text, editing])
 
   const commitEdit = () => {
     if (committedRef.current) return
@@ -119,12 +110,6 @@ export function NodeRow({
     }
   }
 
-  const commitNotes = () => {
-    setEditingNotes(false)
-    if (notesText !== (node.notes || '')) {
-      onUpdate({ notes: notesText || null })
-    }
-  }
 
   // Fetch archive autocomplete suggestions (empty string returns top 3 by frequency)
   const fetchArchiveAc = useCallback((text: string) => {
@@ -263,6 +248,7 @@ export function NodeRow({
 
   // Long-press delete confirm on detail button
   const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [deleteChildren, setDeleteChildren] = useState(false)
   const detailLpTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const detailLpFired = useRef(false)
 
@@ -490,24 +476,12 @@ export function NodeRow({
           </span>
         )}
 
-        {/* Notes toggle (sections only — items use detail panel via long-press) */}
-        {node.type === 'section' && (
+        {/* Detail button: tap → details, long-press → delete confirm */}
+        {onOpenDetail && (
           <button
-            className={`p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0 ${node.notes ? '!opacity-100' : ''}`}
-            onClick={(e) => { e.stopPropagation(); setShowNotes(!showNotes) }}
-            tabIndex={-1}
-            title="Notes"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h6m-3 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/>
-            </svg>
-          </button>
-        )}
-
-        {/* Detail button (items): tap → details, long-press → delete confirm */}
-        {node.type === 'item' && onOpenDetail ? (
-          <button
-            className="p-1 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0"
+            className="p-1 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0 select-none"
+            style={{ WebkitTouchCallout: 'none' }}
+            onContextMenu={(e) => { e.preventDefault(); e.stopPropagation() }}
             onPointerDown={(e) => {
               e.stopPropagation()
               detailLpFired.current = false
@@ -516,14 +490,10 @@ export function NodeRow({
                 setDeleteConfirm(true)
               }, 500)
             }}
-            onPointerUp={(e) => {
-              e.stopPropagation()
+            onPointerUp={() => {
               if (detailLpTimer.current) {
                 clearTimeout(detailLpTimer.current)
                 detailLpTimer.current = null
-              }
-              if (!detailLpFired.current) {
-                onOpenDetail()
               }
             }}
             onPointerLeave={() => {
@@ -532,23 +502,17 @@ export function NodeRow({
                 detailLpTimer.current = null
               }
             }}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation()
+              if (!detailLpFired.current) {
+                onOpenDetail()
+              }
+            }}
             tabIndex={-1}
             title="Details (long-press to delete)"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
-          </button>
-        ) : (
-          <button
-            className="p-1 text-gray-400 hover:text-red-500 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0"
-            onClick={(e) => { e.stopPropagation(); onDelete() }}
-            tabIndex={-1}
-            title="Delete"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
             </svg>
           </button>
         )}
@@ -572,48 +536,46 @@ export function NodeRow({
       {deleteConfirm && (
         <div
           style={{ paddingLeft: `${indent + 8}px` }}
-          className="flex items-center gap-2 py-1.5 px-2"
+          className="py-1.5 px-2"
           onClick={(e) => e.stopPropagation()}
         >
-          <span className="text-sm text-red-500">Delete this item?</span>
-          <button
-            onClick={() => { setDeleteConfirm(false); onDelete() }}
-            className="px-3 py-1.5 text-xs font-medium bg-red-500 text-white rounded-lg hover:bg-red-600"
-          >
-            Delete
-          </button>
-          <button
-            onClick={() => setDeleteConfirm(false)}
-            className="px-3 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
-          >
-            Cancel
-          </button>
-        </div>
-      )}
-
-      {/* Inline notes */}
-      {showNotes && (
-        <div style={{ paddingLeft: `${indent + 52}px` }} className="pb-1 overflow-hidden">
-          {editingNotes ? (
-            <textarea
-              ref={notesRef}
-              value={notesText}
-              onChange={(e) => setNotesText(e.target.value)}
-              onBlur={commitNotes}
-              onKeyDown={(e) => { if (e.key === 'Escape') { setNotesText(node.notes || ''); setEditingNotes(false) } }}
-              className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm text-gray-600 dark:text-gray-400 outline-none focus:ring-1 focus:ring-blue-400 resize-y min-h-[60px]"
-              rows={3}
-            />
-          ) : (
-            <div
-              className="text-sm text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/50 rounded p-2 cursor-text whitespace-pre-wrap min-h-[28px]"
-              onClick={() => setEditingNotes(true)}
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-red-500">Delete this {node.type === 'section' ? 'section' : 'item'}?</span>
+            <button
+              onClick={() => {
+                setDeleteConfirm(false)
+                if (node.type === 'section' && onDeleteSection) {
+                  onDeleteSection(deleteChildren)
+                } else {
+                  onDelete()
+                }
+                setDeleteChildren(false)
+              }}
+              className="px-3 py-1.5 text-xs font-medium bg-red-500 text-white rounded-lg hover:bg-red-600"
             >
-              {node.notes || <span className="italic text-gray-400">Add a note...</span>}
-            </div>
+              Delete
+            </button>
+            <button
+              onClick={() => { setDeleteConfirm(false); setDeleteChildren(false) }}
+              className="px-3 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+            >
+              Cancel
+            </button>
+          </div>
+          {node.type === 'section' && (
+            <label className="flex items-center gap-1.5 mt-1.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={deleteChildren}
+                onChange={(e) => setDeleteChildren(e.target.checked)}
+                className="rounded border-gray-300 dark:border-gray-600 text-red-500 focus:ring-red-500"
+              />
+              <span className="text-xs text-gray-500 dark:text-gray-400">Delete all items within section</span>
+            </label>
           )}
         </div>
       )}
+
     </div>
   )
 }

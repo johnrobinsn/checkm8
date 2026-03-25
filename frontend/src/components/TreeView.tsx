@@ -54,6 +54,7 @@ function SortableNode({
   onEditingChange,
   onNavigateToSection,
   onOpenDetail,
+  onDeleteSection,
   onPaste,
 }: {
   node: TreeNode
@@ -66,6 +67,7 @@ function SortableNode({
   onUpdate: (data: any) => void
   onFocus: () => void
   onDelete: () => void
+  onDeleteSection?: (deleteChildren: boolean) => void
   onEditingChange?: (editing: boolean) => void
   onNavigateToSection?: (listId: string, sectionId: string) => void
   onOpenDetail?: () => void
@@ -97,6 +99,7 @@ function SortableNode({
         onUpdate={onUpdate}
         onFocus={onFocus}
         onDelete={onDelete}
+        onDeleteSection={onDeleteSection}
         onEditingChange={onEditingChange}
         onNavigateToSection={onNavigateToSection}
         onOpenDetail={onOpenDetail}
@@ -609,6 +612,22 @@ export function TreeView({
                   onUpdate={(data) => onUpdate(node.id, data)}
                   onFocus={() => onFocus(node.id)}
                   onDelete={() => onDelete(node.id)}
+                  onDeleteSection={node.type === 'section' ? async (deleteChildren) => {
+                    if (deleteChildren) {
+                      onDelete(node.id)
+                    } else {
+                      // Promote children to be siblings after this section, then delete section
+                      const children = nodes
+                        .filter((n) => n.parent_id === node.id)
+                        .sort((a, b) => a.position - b.position)
+                      let afterId: string | null = node.id
+                      for (const child of children) {
+                        await onMoveNode(child.id, node.parent_id, afterId)
+                        afterId = child.id
+                      }
+                      onDelete(node.id)
+                    }
+                  } : undefined}
                   onEditingChange={(editing) => {
                     setIsEditing(editing)
                     if (!editing) setEditingNodeId(null)
@@ -668,12 +687,27 @@ export function TreeView({
       {/* Item detail panel */}
       {detailNodeId && (() => {
         const detailNode = visibleNodes.find((n) => n.id === detailNodeId)
-        if (!detailNode || detailNode.type !== 'item') return null
+        if (!detailNode) return null
         return (
           <ItemDetailPanel
             node={detailNode}
             onUpdate={(data) => onUpdate(detailNodeId, data)}
             onDelete={() => onDelete(detailNodeId)}
+            onDeleteSection={detailNode.type === 'section' ? async (deleteChildren) => {
+              if (deleteChildren) {
+                onDelete(detailNodeId)
+              } else {
+                const children = nodes
+                  .filter((n) => n.parent_id === detailNodeId)
+                  .sort((a, b) => a.position - b.position)
+                let afterId: string | null = detailNodeId
+                for (const child of children) {
+                  await onMoveNode(child.id, detailNode.parent_id, afterId)
+                  afterId = child.id
+                }
+                onDelete(detailNodeId)
+              }
+            } : undefined}
             onClose={() => setDetailNodeId(null)}
           />
         )
