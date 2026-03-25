@@ -4,8 +4,9 @@ export function buildTree(nodes: NodeOut[]): TreeNode[] {
   const map = new Map<string, TreeNode>()
   const roots: TreeNode[] = []
 
-  // Create TreeNode wrappers
+  // Create TreeNode wrappers (skip archived nodes)
   for (const node of nodes) {
+    if (node.archived) continue
     map.set(node.id, { ...node, children: [], depth: 0 })
   }
 
