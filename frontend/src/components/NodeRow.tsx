@@ -42,6 +42,7 @@ export function NodeRow({
   const committedRef = useRef(false)
 
   const setEditing = (value: boolean) => {
+    if (value) committedRef.current = false
     setEditingState(value)
     onEditingChange?.(value)
   }
@@ -49,7 +50,6 @@ export function NodeRow({
   // Allow parent to trigger edit mode
   useEffect(() => {
     if (startEditingProp && focused && !editing) {
-      committedRef.current = false
       setEditing(true)
     }
   }, [startEditingProp, focused])
