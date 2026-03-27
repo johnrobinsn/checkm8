@@ -41,6 +41,7 @@ export function NodeRow({
 }: NodeRowProps) {
   const [editing, setEditingState] = useState(false)
   const [editText, setEditText] = useState(node.text)
+  const pendingTextRef = useRef<string | null>(null)
   const committedRef = useRef(false)
 
   const setEditing = (value: boolean) => {
@@ -89,6 +90,9 @@ export function NodeRow({
   }, [editing])
 
   useEffect(() => {
+    if (pendingTextRef.current !== null && node.text === pendingTextRef.current) {
+      pendingTextRef.current = null
+    }
     if (!editing) {
       setEditText(node.text)
       setAcActive(false)
@@ -106,6 +110,7 @@ export function NodeRow({
     setAcActive(false)
     setArchiveAcVisible(false)
     if (textToSave !== node.text) {
+      pendingTextRef.current = textToSave
       onUpdate({ text: textToSave })
     }
   }
@@ -326,13 +331,14 @@ export function NodeRow({
 
   // Render text with links
   const renderText = () => {
-    if (!node.text) {
+    const displayText = pendingTextRef.current ?? node.text
+    if (!displayText) {
       return <span className="text-gray-400 italic">untitled</span>
     }
-    if (!hasLinks(node.text)) {
-      return <>{node.text}</>
+    if (!hasLinks(displayText)) {
+      return <>{displayText}</>
     }
-    const segments = parseLinks(node.text)
+    const segments = parseLinks(displayText)
     return (
       <>
         {segments.map((seg, i) => {

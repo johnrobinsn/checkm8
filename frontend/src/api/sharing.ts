@@ -1,8 +1,8 @@
 import { apiFetch } from './client'
 import type { Permission, Share } from '../types'
 
-export async function createShare(listId: string, permission: Permission = 'read'): Promise<Share> {
-  return apiFetch(`/lists/${listId}/shares`, { method: 'POST', body: JSON.stringify({ permission }) })
+export async function createShare(listId: string, permission: Permission = 'read', invitedEmail?: string): Promise<Share> {
+  return apiFetch(`/lists/${listId}/shares`, { method: 'POST', body: JSON.stringify({ permission, invited_email: invitedEmail || undefined }) })
 }
 
 export async function getShares(listId: string): Promise<Share[]> {

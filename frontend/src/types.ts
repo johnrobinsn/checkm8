@@ -15,6 +15,7 @@ export interface AuthResponse {
 export interface TodoList {
   id: string
   owner_id: string
+  owner_email: string | null
   title: string
   archived: boolean
   created_at: string
@@ -75,6 +76,8 @@ export interface Share {
   id: string
   list_id: string
   user_id: string | null
+  user_email: string | null
+  invited_email: string | null
   share_token: string
   permission: Permission
   created_at: string

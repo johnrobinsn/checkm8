@@ -6,7 +6,10 @@ import aiosqlite
 
 async def get_accessible_list(db: aiosqlite.Connection, list_id: str, user_id: str) -> dict | None:
     """Get a list if the user owns it or has a share."""
-    rows = await db.execute_fetchall("SELECT * FROM lists WHERE id = ?", (list_id,))
+    rows = await db.execute_fetchall(
+        "SELECT l.*, u.email AS owner_email FROM lists l LEFT JOIN users u ON u.id = l.owner_id WHERE l.id = ?",
+        (list_id,),
+    )
     if not rows:
         return None
     lst = dict(rows[0])

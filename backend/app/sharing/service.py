@@ -5,13 +5,13 @@ import aiosqlite
 
 
 async def create_share_link(
-    db: aiosqlite.Connection, list_id: str, permission: str
+    db: aiosqlite.Connection, list_id: str, permission: str, invited_email: str | None = None
 ) -> dict:
     share_id = str(uuid.uuid4())
     share_token = secrets.token_urlsafe(16)
     await db.execute(
-        "INSERT INTO list_shares (id, list_id, share_token, permission) VALUES (?, ?, ?, ?)",
-        (share_id, list_id, share_token, permission),
+        "INSERT INTO list_shares (id, list_id, share_token, permission, invited_email) VALUES (?, ?, ?, ?, ?)",
+        (share_id, list_id, share_token, permission, invited_email),
     )
     await db.commit()
     rows = await db.execute_fetchall("SELECT * FROM list_shares WHERE id = ?", (share_id,))
@@ -64,7 +64,11 @@ async def claim_share(db: aiosqlite.Connection, share_token: str, user_id: str) 
 
 async def get_shares(db: aiosqlite.Connection, list_id: str) -> list[dict]:
     rows = await db.execute_fetchall(
-        "SELECT * FROM list_shares WHERE list_id = ?", (list_id,)
+        """SELECT s.*, u.email AS user_email
+           FROM list_shares s
+           LEFT JOIN users u ON u.id = s.user_id
+           WHERE s.list_id = ?""",
+        (list_id,),
     )
     return [dict(r) for r in rows]
 

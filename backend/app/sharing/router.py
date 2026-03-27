@@ -24,7 +24,7 @@ async def create_share(
     lst = await get_accessible_list(db, list_id, user["id"])
     if not lst or lst["owner_id"] != user["id"]:
         raise HTTPException(status_code=403, detail="Only the owner can create share links")
-    share = await create_share_link(db, list_id, body.permission.value)
+    share = await create_share_link(db, list_id, body.permission.value, body.invited_email)
     return ShareOut(**share)
 
 

@@ -70,6 +70,7 @@ class ListUpdate(BaseModel):
 class ListOut(BaseModel):
     id: str
     owner_id: str
+    owner_email: str | None = None
     title: str
     archived: bool
     created_at: str
@@ -153,12 +154,15 @@ class NodeOut(BaseModel):
 
 class ShareCreate(BaseModel):
     permission: Permission = Permission.read
+    invited_email: str | None = None
 
 
 class ShareOut(BaseModel):
     id: str
     list_id: str
     user_id: str | None = None
+    user_email: str | None = None
+    invited_email: str | None = None
     share_token: str
     permission: Permission
     created_at: str

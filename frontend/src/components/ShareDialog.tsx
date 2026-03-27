@@ -5,12 +5,15 @@ import * as sharingApi from '../api/sharing'
 interface ShareDialogProps {
   listId: string
   isOwner: boolean
+  ownerEmail?: string | null
+  createdAt?: string | null
   onClose: () => void
 }
 
-export function ShareDialog({ listId, isOwner, onClose }: ShareDialogProps) {
+export function ShareDialog({ listId, isOwner, ownerEmail, createdAt, onClose }: ShareDialogProps) {
   const [shares, setShares] = useState<Share[]>([])
   const [permission, setPermission] = useState<Permission>('read')
+  const [inviteEmail, setInviteEmail] = useState('')
   const [copied, setCopied] = useState(false)
   const [newShareToken, setNewShareToken] = useState<string | null>(null)
 
@@ -19,9 +22,10 @@ export function ShareDialog({ listId, isOwner, onClose }: ShareDialogProps) {
   }, [listId])
 
   const handleCreateLink = async () => {
-    const share = await sharingApi.createShare(listId, permission)
+    const share = await sharingApi.createShare(listId, permission, inviteEmail.trim() || undefined)
     setShares((prev) => [...prev, share])
     setNewShareToken(share.share_token)
+    setInviteEmail('')
   }
 
   const handleCopy = () => {
@@ -38,7 +42,7 @@ export function ShareDialog({ listId, isOwner, onClose }: ShareDialogProps) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-[60]" onClick={onClose}>
       <div
         className="bg-white dark:bg-gray-800 rounded-t-xl sm:rounded-xl shadow-xl w-full sm:max-w-md p-4 sm:p-6 max-h-[85vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
@@ -51,10 +55,23 @@ export function ShareDialog({ listId, isOwner, onClose }: ShareDialogProps) {
             </svg>
           </button>
         </div>
+        {(ownerEmail || createdAt) && (
+          <div className="mb-4 text-xs text-gray-500 dark:text-gray-400">
+            {ownerEmail && <div>Owner: {ownerEmail}</div>}
+            {createdAt && <div>Created: {new Date(createdAt + 'Z').toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>}
+          </div>
+        )}
 
         {/* Generate new link */}
         {isOwner && (
           <div className="mb-6">
+            <input
+              type="email"
+              placeholder="Email address"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              className="w-full px-3 py-2 mb-2 text-sm bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 outline-none placeholder-gray-400"
+            />
             <div className="flex items-center gap-2 mb-3">
               <select
                 value={permission}
@@ -103,8 +120,13 @@ export function ShareDialog({ listId, isOwner, onClose }: ShareDialogProps) {
                 <div key={share.id} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
                   <div>
                     <span className="text-sm text-gray-700 dark:text-gray-300">
-                      {share.user_id ? share.user_id.slice(0, 8) + '...' : 'Unclaimed'}
+                      {share.user_email ?? share.invited_email ?? 'Unknown'}
                     </span>
+                    {!share.user_id && (
+                      <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400">
+                        unclaimed
+                      </span>
+                    )}
                     <span className={`ml-2 text-xs px-1.5 py-0.5 rounded ${share.permission === 'write' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-gray-100 dark:bg-gray-600 text-gray-600 dark:text-gray-300'}`}>
                       {share.permission}
                     </span>

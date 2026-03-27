@@ -131,4 +131,9 @@ async def init_db(db_path: str | None = None):
         """)
         # Create index on archived (after column exists)
         await db.execute("CREATE INDEX IF NOT EXISTS idx_nodes_archived ON nodes(list_id, archived)")
+        # Migration: add invited_email column to list_shares
+        try:
+            await db.execute("ALTER TABLE list_shares ADD COLUMN invited_email TEXT")
+        except Exception:
+            pass  # column already exists
         await db.commit()

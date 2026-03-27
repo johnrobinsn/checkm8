@@ -262,6 +262,7 @@ export function AppShell() {
                   </svg>
                 </button>
                 )}
+                {isOwner && (
                 <button
                   onClick={() => setShowShare(true)}
                   className="px-2 py-1 text-sm bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg flex items-center gap-1 transition-colors"
@@ -271,6 +272,7 @@ export function AppShell() {
                   </svg>
                   <span className="hidden sm:inline">Share</span>
                 </button>
+                )}
               </div>
             </div>
 
@@ -349,6 +351,8 @@ export function AppShell() {
         <ShareDialog
           listId={selectedListId}
           isOwner={isOwner}
+          ownerEmail={selectedList?.owner_email}
+          createdAt={selectedList?.created_at}
           onClose={() => setShowShare(false)}
         />
       )}
@@ -367,7 +371,7 @@ export function AppShell() {
           {fabMenuOpen && (
             <div className="fixed inset-0 z-40" onClick={() => setFabMenuOpen(false)} />
           )}
-          <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2">
+          <div className="fixed bottom-10 right-14 z-50 flex flex-col items-end gap-2">
             {fabMenuOpen && (
               <div className="mb-1 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
                 <button
