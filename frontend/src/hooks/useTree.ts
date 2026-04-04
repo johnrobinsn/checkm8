@@ -1,12 +1,33 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { NodeCreate, NodeOut, NodeUpdate, PresenceUser, WsMessage } from '../types'
 import { buildTree, getVisibleNodes } from '../lib/tree'
 import * as nodesApi from '../api/nodes'
 import { useWebSocket } from './useWebSocket'
 import { useUndoRedo } from './useUndoRedo'
 
+// localStorage cache helpers for stale-while-revalidate
+const CACHE_KEY = 'checkm8_nodes_cache'
+
+function getCachedNodes(listId: string): NodeOut[] | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY)
+    if (!raw) return null
+    const cached = JSON.parse(raw)
+    if (cached.listId === listId && Array.isArray(cached.nodes)) return cached.nodes
+  } catch {}
+  return null
+}
+
+function setCachedNodes(listId: string, nodes: NodeOut[]) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ listId, nodes }))
+  } catch {}
+}
+
 export function useTree(listId: string | null) {
-  const [nodes, setNodes] = useState<NodeOut[]>([])
+  const [nodes, setNodes] = useState<NodeOut[]>(() =>
+    listId ? getCachedNodes(listId) ?? [] : []
+  )
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [focusedId, setFocusedId] = useState<string | null>(null)
   const [presenceUsers, setPresenceUsers] = useState<PresenceUser[]>([])
@@ -20,12 +41,24 @@ export function useTree(listId: string | null) {
       return
     }
     const controller = new AbortController()
-    setLoading(true)
+    const cached = getCachedNodes(listId)
+    // Only show spinner if we have no cached data to display
+    if (!cached || cached.length === 0) {
+      setLoading(true)
+    }
+    // Seed from cache immediately if switching lists
+    if (cached) {
+      setNodes(cached)
+    } else {
+      setNodes([])
+    }
+    setCollapsed(new Set())
+    setFocusedId(null)
+    // Fetch fresh data silently
     nodesApi.getNodes(listId).then((data) => {
       if (!controller.signal.aborted) {
         setNodes(data)
-        setCollapsed(new Set())
-        setFocusedId(null)
+        setCachedNodes(listId, data)
       }
     }).finally(() => {
       if (!controller.signal.aborted) {
@@ -33,6 +66,21 @@ export function useTree(listId: string | null) {
       }
     })
     return () => controller.abort()
+  }, [listId])
+
+  // Re-fetch when app resumes from background (PWA visibility change)
+  useEffect(() => {
+    if (!listId) return
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        nodesApi.getNodes(listId).then((data) => {
+          setNodes(data)
+          setCachedNodes(listId, data)
+        }).catch(() => {})
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
   }, [listId])
 
   // WebSocket handler
@@ -69,6 +117,15 @@ export function useTree(listId: string | null) {
   }, [])
 
   useWebSocket(listId, handleWsMessage)
+
+  // Persist nodes to localStorage cache (debounced) so next launch is instant
+  const cacheTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (!listId || nodes.length === 0) return
+    if (cacheTimer.current) clearTimeout(cacheTimer.current)
+    cacheTimer.current = setTimeout(() => setCachedNodes(listId, nodes), 1000)
+    return () => { if (cacheTimer.current) clearTimeout(cacheTimer.current) }
+  }, [listId, nodes])
 
   // Deduplicate and filter archived nodes — guards against races between fetch, optimistic add, and WS
   const uniqueNodes = useMemo(() => {

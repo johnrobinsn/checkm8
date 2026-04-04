@@ -30,25 +30,12 @@ function debugLog(msg: string) {
   if (el) el.textContent = msg
 }
 
-// ── Minimal type stubs (dnd-kit doesn't export the sensor interface) ─
+// ── Minimal type stubs ─
 interface Coordinates { x: number; y: number }
-interface SensorProps {
-  active: { id: string | number }
-  activeNode: { node: HTMLElement }
-  event: Event
-  onStart(coords: Coordinates): void
-  onMove(coords: Coordinates): void
-  onEnd(): void
-  onCancel(): void
-  onAbort(id: string | number): void
-  options: LongPressOptions
-}
 
-interface LongPressOptions {
-  delay?: number
-  tolerance?: number
-  scrollContainerRef?: React.RefObject<HTMLElement | null>
-}
+// Use `any` for constructor props to match dnd-kit's internal SensorProps type
+// which isn't publicly exported with compatible generics.
+type SensorProps = any
 
 // ── Sensor class ──────────────────────────────────────────────────
 export class LongPressTouchSensor {
@@ -144,7 +131,7 @@ export class LongPressTouchSensor {
 
   // ── Static activators (dnd-kit calls this to decide if sensor fires) ─
   static activators = [{
-    eventName: 'onTouchStart',
+    eventName: 'onTouchStart' as const,
     handler: (event: SyntheticEvent, _options: any, _ctx: any) => {
       const te = event.nativeEvent as TouchEvent
       debugLog(`[S] activator fired touches=${te.touches.length}`)

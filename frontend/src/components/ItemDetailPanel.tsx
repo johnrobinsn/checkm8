@@ -6,7 +6,7 @@ const MAX_IMAGE_DIM = 2048
 const JPEG_QUALITY = 0.8
 
 function compressImage(file: File): Promise<File> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     if (!file.type.startsWith('image/')) {
       resolve(file)
       return

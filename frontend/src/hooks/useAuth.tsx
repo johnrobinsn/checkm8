@@ -19,24 +19,48 @@ const AuthContext = createContext<AuthContextType>({
   logout: () => {},
 })
 
+function getCachedUser(): User | null {
+  try {
+    const raw = localStorage.getItem('checkm8_user')
+    if (raw) return JSON.parse(raw)
+  } catch {}
+  return null
+}
+
+function setCachedUser(user: User | null) {
+  try {
+    if (user) localStorage.setItem('checkm8_user', JSON.stringify(user))
+    else localStorage.removeItem('checkm8_user')
+  } catch {}
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
   const [token, setTokenState] = useState<string | null>(getToken())
-  const [loading, setLoading] = useState(true)
+  const cachedUser = token ? getCachedUser() : null
+  const [user, setUser] = useState<User | null>(cachedUser)
+  // Skip loading spinner if we have a cached user + token
+  const [loading, setLoading] = useState(!cachedUser && !!token)
 
   useEffect(() => {
     if (!token) {
       setLoading(false)
+      setUser(null)
+      setCachedUser(null)
       return
     }
     getMe()
-      .then(setUser)
+      .then((u) => {
+        setUser(u)
+        setCachedUser(u)
+      })
       .catch((err) => {
         // Only clear token on explicit 401 (handled by apiFetch).
         // Network errors / server downtime should not wipe credentials.
         if (err?.message === 'Unauthorized') {
           clearToken()
           setTokenState(null)
+          setUser(null)
+          setCachedUser(null)
         }
       })
       .finally(() => setLoading(false))
@@ -46,12 +70,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(newToken)
     setTokenState(newToken)
     setUser(newUser)
+    setCachedUser(newUser)
   }
 
   const logout = () => {
     clearToken()
     setTokenState(null)
     setUser(null)
+    setCachedUser(null)
   }
 
   return (
